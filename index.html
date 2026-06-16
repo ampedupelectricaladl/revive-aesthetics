@@ -113,7 +113,9 @@
     font-size: 0.68rem; letter-spacing: 0.34em; text-transform: uppercase;
     color: var(--cream); opacity: 0.85; font-weight: 300;
   }
-  .brand img { height: 42px; width: auto; }
+  .brand-logo { height: 46px; width: auto; }
+  .hero-logo { height: 96px; width: auto; margin: 0 auto 30px; }
+  .footer-logo { height: 70px; width: auto; margin: 0 auto; }
   nav.links { display: flex; align-items: center; gap: 34px; }
   nav.links a {
     color: var(--cream); font-size: 0.74rem; letter-spacing: 0.16em;
@@ -251,9 +253,14 @@
 <header class="nav">
   <div class="wrap nav-inner">
     <a class="brand" href="#top">
-      <!-- Swap this span for: <img src="assets/logo-cream.png" alt="Revive Aesthetics" /> once the logo PNG is added -->
-      <span class="monogram">RA</span>
-      <span class="name">Revive&nbsp;Aesthetics</span>
+      <!-- Uses the real logo (assets/logo-cream.png). If the file isn't present yet,
+           it falls back to the text wordmark so the site never shows a broken image. -->
+      <img src="assets/logo-cream.png" alt="Revive Aesthetics" class="brand-logo"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';" />
+      <span class="brand-fallback" style="display:none;align-items:center;gap:14px;">
+        <span class="monogram">RA</span>
+        <span class="name">Revive&nbsp;Aesthetics</span>
+      </span>
     </a>
     <nav class="links" id="navlinks">
       <a href="#services">Treatments</a>
@@ -423,8 +430,10 @@
 <!-- ===================== FOOTER ===================== -->
 <footer class="site">
   <div class="wrap">
-    <div class="monogram">RA</div>
-    <div class="name">Revive Aesthetics</div>
+    <img src="assets/logo-cream.png" alt="Revive Aesthetics" class="footer-logo"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='block';this.nextElementSibling.nextElementSibling.style.display='block';" />
+    <div class="monogram" style="display:none;">RA</div>
+    <div class="name" style="display:none;">Revive Aesthetics</div>
     <div class="fnav">
       <a href="#services">Treatments</a>
       <a href="#about">About</a>
