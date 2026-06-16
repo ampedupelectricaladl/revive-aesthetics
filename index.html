@@ -113,9 +113,9 @@
     font-size: 0.68rem; letter-spacing: 0.34em; text-transform: uppercase;
     color: var(--cream); opacity: 0.85; font-weight: 300;
   }
-  .brand-logo { height: 46px; width: auto; }
-  .hero-logo { height: 96px; width: auto; margin: 0 auto 30px; }
-  .footer-logo { height: 70px; width: auto; margin: 0 auto; }
+  .brand-logo { height: 60px; width: auto; border-radius: 4px; }
+  .hero-logo { height: 110px; width: auto; margin: 0 auto 30px; border-radius: 6px; }
+  .footer-logo { height: 104px; width: auto; margin: 0 auto; border-radius: 6px; }
   nav.links { display: flex; align-items: center; gap: 34px; }
   nav.links a {
     color: var(--cream); font-size: 0.74rem; letter-spacing: 0.16em;
@@ -255,7 +255,7 @@
     <a class="brand" href="#top">
       <!-- Uses the real logo (assets/logo-cream.png). If the file isn't present yet,
            it falls back to the text wordmark so the site never shows a broken image. -->
-      <img src="assets/logo-cream.png" alt="Revive Aesthetics" class="brand-logo"
+      <img src="assets/logo-cream.jpg" alt="Revive Aesthetics" class="brand-logo"
            onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';" />
       <span class="brand-fallback" style="display:none;align-items:center;gap:14px;">
         <span class="monogram">RA</span>
@@ -385,9 +385,7 @@
       <div class="row"><span class="lbl">Area</span><span>Adelaide, South Australia</span></div>
 
       <div class="socials">
-        <!-- Update these links once Instagram / Facebook handles are confirmed -->
-        <a href="#" target="_blank" rel="noopener">Instagram</a>
-        <a href="#" target="_blank" rel="noopener">Facebook</a>
+        <a href="https://www.instagram.com/reviveaesthetics.adl/" target="_blank" rel="noopener">Instagram</a>
       </div>
     </div>
 
@@ -430,7 +428,7 @@
 <!-- ===================== FOOTER ===================== -->
 <footer class="site">
   <div class="wrap">
-    <img src="assets/logo-cream.png" alt="Revive Aesthetics" class="footer-logo"
+    <img src="assets/logo-cream.jpg" alt="Revive Aesthetics" class="footer-logo"
          onerror="this.style.display='none';this.nextElementSibling.style.display='block';this.nextElementSibling.nextElementSibling.style.display='block';" />
     <div class="monogram" style="display:none;">RA</div>
     <div class="name" style="display:none;">Revive Aesthetics</div>
