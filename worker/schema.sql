@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS blocked_dates (
 INSERT OR IGNORE INTO treatments (id, name, duration_min, price_aud, description, active, sort) VALUES
   ('peel', 'Chemical Peel', 45, 145,
    'Professional-grade peel to resurface, brighten and refine — tailored strength for your skin type and goals.', 1, 1),
-  ('microneedling', 'PDRN Microneedling Booster', 60, 295,
+  ('microneedling', 'PDRN Microneedling Booster', 60, 290,
    'Collagen-induction microneedling boosted with PDRN — supports skin repair, softens scarring, smooths texture and improves firmness for a fresher, plumper complexion.', 1, 2);
 
 INSERT OR IGNORE INTO addons (id, name, duration_min, price_aud, active) VALUES
