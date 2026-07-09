@@ -155,7 +155,7 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       'SELECT id, name, duration_min, price_aud, description FROM treatments WHERE active = 1 ORDER BY sort'
     ).all();
     const { results: addons } = await db.prepare(
-      'SELECT id, name, duration_min, price_aud FROM addons WHERE active = 1'
+      'SELECT id, name, duration_min, price_aud FROM addons WHERE active = 1 ORDER BY price_aud DESC, name'
     ).all();
     return json({ treatments: results, addons }, 200, cors);
   }
@@ -164,9 +164,9 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     const tId = url.searchParams.get('treatment');
     const t = await db.prepare('SELECT * FROM treatments WHERE id = ? AND active = 1').bind(tId).first();
     if (!t) return json({ error: 'unknown_treatment' }, 400, cors);
-    const addon = await lookupAddon(db, url.searchParams.get('addon'));
-    if (addon === undefined) return json({ error: 'unknown_addon' }, 400, cors);
-    const duration = t.duration_min + (addon ? addon.duration_min : 0);
+    const addons = await lookupAddons(db, url.searchParams.get('addon'));
+    if (addons === undefined) return json({ error: 'unknown_addon' }, 400, cors);
+    const duration = t.duration_min + addons.reduce((s, a) => s + a.duration_min, 0);
     const now = nowInAdelaide();
     let from = url.searchParams.get('from');
     if (!isDateStr(from) || from < now.date) from = now.date;
@@ -188,8 +188,8 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     if (b.website) return json({ ok: true }, 200, cors); // honeypot: pretend success
 
     const t = await db.prepare('SELECT * FROM treatments WHERE id = ? AND active = 1').bind(b.treatment).first();
-    const addon = await lookupAddon(db, b.addon);
-    if (addon === undefined) return json({ error: 'unknown_addon' }, 400, cors);
+    const addons = await lookupAddons(db, b.addons ?? b.addon);
+    if (addons === undefined) return json({ error: 'unknown_addon' }, 400, cors);
     const startMin = parseHHMM(b.time) ?? (Number.isInteger(b.start_min) ? b.start_min : null);
     const name = String(b.name || '').trim();
     const phone = String(b.phone || '').trim();
@@ -202,7 +202,9 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     if (phone.replace(/\D/g, '').length < 8) return json({ error: 'phone_required' }, 400, cors);
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'bad_email' }, 400, cors);
 
-    const duration = t.duration_min + (addon ? addon.duration_min : 0);
+    const duration = t.duration_min + addons.reduce((s, a) => s + a.duration_min, 0);
+    const price = t.price_aud + addons.reduce((s, a) => s + a.price_aud, 0);
+    const addonNames = addons.map(a => a.name).join(' + ');
     const now = nowInAdelaide();
     const open = await slotsForDate(db, b.date, duration, now.abs);
     if (!open.includes(startMin)) return json({ error: 'slot_unavailable' }, 409, cors);
@@ -217,10 +219,10 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     const cancelToken = crypto.randomUUID();
     try {
       await db.prepare(
-        `INSERT INTO bookings (id, treatment_id, addon_id, date, start_min, end_min, name, phone, email, notes, cancel_token, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(id, t.id, addon ? addon.id : null, b.date, startMin, startMin + duration, name, phone, email, notes,
-             cancelToken, new Date().toISOString()).run();
+        `INSERT INTO bookings (id, treatment_id, addon_ids, addon_names, date, start_min, end_min, name, phone, email, notes, cancel_token, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(id, t.id, addons.map(a => a.id).join(','), addonNames, b.date, startMin, startMin + duration,
+             name, phone, email, notes, cancelToken, new Date().toISOString()).run();
     } catch (e) {
       if (String(e.message || e).includes('UNIQUE')) return json({ error: 'slot_unavailable' }, 409, cors);
       throw e;
@@ -228,7 +230,7 @@ async function handlePublic(req, env, ctx, url, path, cors) {
 
     ctx.waitUntil(telegram(env,
       `\u{1F33F} <b>New Revive booking</b>\n` +
-      `${t.name}${addon ? ' + ' + addon.name : ''} — ${fmtDate(b.date)}, ${fmtTime(startMin)} (${duration} min · $${t.price_aud + (addon ? addon.price_aud : 0)})\n` +
+      `${t.name}${addonNames ? ' + ' + addonNames : ''} — ${fmtDate(b.date)}, ${fmtTime(startMin)} (${duration} min · $${price})\n` +
       `${name} · ${phone}${email ? ' · ' + email : ''}` +
       (notes ? `\nNotes: ${notes}` : '') +
       `\nRef ${id}`
@@ -236,10 +238,10 @@ async function handlePublic(req, env, ctx, url, path, cors) {
 
     return json({
       ok: true, id, cancel_token: cancelToken,
-      treatment: t.name, addon: addon ? addon.name : null,
+      treatment: t.name, addon: addonNames || null,
       date: b.date, date_label: fmtDate(b.date),
       time_label: fmtTime(startMin), duration_min: duration,
-      price_aud: t.price_aud + (addon ? addon.price_aud : 0),
+      price_aud: price,
     }, 200, cors);
   }
 
@@ -272,18 +274,25 @@ async function handlePublic(req, env, ctx, url, path, cors) {
 async function lookupBooking(db, id, token) {
   if (!id || !token) return null;
   return db.prepare(
-    `SELECT b.*, t.name AS tname, a.name AS aname
+    `SELECT b.*, t.name AS tname, b.addon_names AS aname
      FROM bookings b JOIN treatments t ON t.id = b.treatment_id
-     LEFT JOIN addons a ON a.id = b.addon_id
      WHERE b.id = ? AND b.cancel_token = ?`
   ).bind(String(id), String(token)).first();
 }
 
-/** null = no addon requested; undefined = requested but unknown/inactive */
-async function lookupAddon(db, id) {
-  if (!id) return null;
-  const a = await db.prepare('SELECT * FROM addons WHERE id = ? AND active = 1').bind(String(id)).first();
-  return a || undefined;
+/** Accepts an array of ids or a CSV string. Returns [] for none,
+ *  undefined if any requested addon is unknown/inactive. */
+async function lookupAddons(db, ids) {
+  const list = (Array.isArray(ids) ? ids : String(ids || '').split(','))
+    .map(s => String(s).trim()).filter(Boolean);
+  if (!list.length) return [];
+  const out = [];
+  for (const id of [...new Set(list)]) {
+    const a = await db.prepare('SELECT * FROM addons WHERE id = ? AND active = 1').bind(id).first();
+    if (!a) return undefined;
+    out.push(a);
+  }
+  return out;
 }
 
 // ---------- admin routes ----------
@@ -296,9 +305,8 @@ async function handleAdmin(req, env, url, path, cors) {
     const to = isDateStr(url.searchParams.get('to')) ? url.searchParams.get('to') : addDays(from, 30);
     const { results } = await db.prepare(
       `SELECT b.id, b.date, b.start_min, b.end_min, b.status, b.name, b.phone, b.email, b.notes,
-              b.created_at, t.name AS treatment, a.name AS addon
+              b.created_at, t.name AS treatment, b.addon_names AS addon
        FROM bookings b JOIN treatments t ON t.id = b.treatment_id
-       LEFT JOIN addons a ON a.id = b.addon_id
        WHERE b.date BETWEEN ? AND ? ORDER BY b.date, b.start_min`
     ).bind(from, to).all();
     return json({ bookings: results.map(r => ({ ...r, time_label: fmtTime(r.start_min) })) }, 200, cors);

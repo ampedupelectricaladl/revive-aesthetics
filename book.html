@@ -309,7 +309,10 @@
 <script>
 (function () {
   var API = window.REVIVE_API_BASE;
-  var state = { treatment: null, addon: null, addons: [], availability: null, date: null, min: null, timeLabel: '' };
+  var state = { treatment: null, sel: [], addons: [], availability: null, date: null, min: null, timeLabel: '' };
+  function selDur() { return state.sel.reduce(function (s, a) { return s + a.duration_min; }, 0); }
+  function selPrice() { return state.sel.reduce(function (s, a) { return s + a.price_aud; }, 0); }
+  function selNames() { return state.sel.map(function (a) { return a.name; }).join(' + '); }
   document.getElementById('yr').textContent = new Date().getFullYear();
 
   function $(id) { return document.getElementById(id); }
@@ -388,22 +391,24 @@
   }).catch(function () { show('p-offline', null); });
 
   function updateTimeSub() {
-    var t = state.treatment, a = state.addon;
-    var dur = t.duration_min + (a ? a.duration_min : 0);
-    var price = t.price_aud + (a ? a.price_aud : 0);
-    $('time-sub').textContent = t.name + (a ? ' + ' + a.name : '') + ' · ' + dur + ' min' + (price > 0 ? ' · $' + price : '');
+    var t = state.treatment;
+    var dur = t.duration_min + selDur();
+    var price = t.price_aud + selPrice();
+    var names = selNames();
+    $('time-sub').textContent = t.name + (names ? ' + ' + names : '') + ' · ' + dur + ' min' + (price > 0 ? ' · $' + price : '');
   }
 
   function renderAddons() {
     var wrap = $('addon-wrap'); wrap.innerHTML = '';
     state.addons.forEach(function (a) {
+      var on = state.sel.some(function (s) { return s.id === a.id; });
       var c = document.createElement('button');
-      c.className = 'chip addon-chip'; c.type = 'button';
-      c.innerHTML = '<span class="box">' + (state.addon && state.addon.id === a.id ? '✓' : '') + '</span>' +
-        'Add ' + a.name + ' <span class="plus">+$' + a.price_aud + ' · +' + a.duration_min + ' min</span>';
-      c.classList.toggle('sel', !!(state.addon && state.addon.id === a.id));
+      c.className = 'chip addon-chip' + (on ? ' sel' : ''); c.type = 'button';
+      c.innerHTML = '<span class="box">' + (on ? '✓' : '') + '</span>' +
+        'Add ' + a.name + ' <span class="plus">' +
+        (a.price_aud > 0 ? '+$' + a.price_aud : 'Free') + ' · +' + a.duration_min + ' min</span>';
       c.addEventListener('click', function () {
-        state.addon = (state.addon && state.addon.id === a.id) ? null : a;
+        state.sel = on ? state.sel.filter(function (s) { return s.id !== a.id; }) : state.sel.concat([a]);
         renderAddons(); updateTimeSub(); loadAvailability();
       });
       wrap.appendChild(c);
@@ -411,7 +416,7 @@
   }
 
   function pickTreatment(t) {
-    state.treatment = t; state.addon = null;
+    state.treatment = t; state.sel = [];
     updateTimeSub(); renderAddons();
     show('p-time', 2);
     loadAvailability();
@@ -422,7 +427,7 @@
     $('date-chips').innerHTML = ''; $('time-wrap').style.display = 'none'; $('time-msg').textContent = '';
     $('a-loading').style.display = 'block';
     var q = '/api/availability?treatment=' + encodeURIComponent(state.treatment.id) +
-            (state.addon ? '&addon=' + encodeURIComponent(state.addon.id) : '');
+            (state.sel.length ? '&addon=' + encodeURIComponent(state.sel.map(function (a) { return a.id; }).join(',')) : '');
     api(q).then(function (r) {
       $('a-loading').style.display = 'none';
       state.availability = r.data.dates || {};
@@ -460,8 +465,9 @@
       c.className = 'chip'; c.type = 'button'; c.textContent = s.label;
       c.addEventListener('click', function () {
         state.min = s.min; state.timeLabel = s.label;
-        var price = state.treatment.price_aud + (state.addon ? state.addon.price_aud : 0);
-        $('sum-what').textContent = state.treatment.name + (state.addon ? ' + ' + state.addon.name : '');
+        var price = state.treatment.price_aud + selPrice();
+        var names = selNames();
+        $('sum-what').textContent = state.treatment.name + (names ? ' + ' + names : '');
         $('sum-when').textContent = f.dow + ' ' + f.day + ' · ' + s.label + (price > 0 ? ' · $' + price : '');
         $('book-msg').textContent = '';
         show('p-details', 3);
@@ -478,7 +484,7 @@
     api('/api/book', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        treatment: state.treatment.id, addon: state.addon ? state.addon.id : null,
+        treatment: state.treatment.id, addons: state.sel.map(function (a) { return a.id; }),
         date: state.date, start_min: state.min,
         name: $('f-name').value, phone: $('f-phone').value,
         email: $('f-email').value, notes: $('f-notes').value,

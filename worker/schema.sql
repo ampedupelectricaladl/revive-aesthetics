@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS addons (
 CREATE TABLE IF NOT EXISTS bookings (
   id           TEXT PRIMARY KEY,
   treatment_id TEXT NOT NULL REFERENCES treatments(id),
-  addon_id     TEXT,                       -- optional, references addons(id)
+  addon_ids    TEXT NOT NULL DEFAULT '',   -- comma-separated addon ids
+  addon_names  TEXT NOT NULL DEFAULT '',   -- display snapshot, e.g. "LED Light Therapy + Skin Consultation"
   date         TEXT NOT NULL,             -- YYYY-MM-DD (Adelaide local)
   start_min    INTEGER NOT NULL,          -- minutes from midnight, Adelaide local
   end_min      INTEGER NOT NULL,
@@ -54,12 +55,11 @@ CREATE TABLE IF NOT EXISTS blocked_dates (
 --      --command "UPDATE treatments SET price_aud=155 WHERE id='peel'"
 -- ============================================================
 INSERT OR IGNORE INTO treatments (id, name, duration_min, price_aud, description, active, sort) VALUES
-  ('consult', 'Skin Consultation', 30, 0,
-   'A one-on-one skin assessment. We talk through your concerns and map out a treatment plan built around you.', 1, 1),
   ('peel', 'Chemical Peel', 45, 145,
-   'Professional-grade peel to resurface, brighten and refine — tailored strength for your skin type and goals.', 1, 2),
-  ('microneedling', 'Microneedling', 75, 295,
-   'Collagen-induction therapy to soften scarring, smooth texture and improve firmness over time.', 1, 3);
+   'Professional-grade peel to resurface, brighten and refine — tailored strength for your skin type and goals.', 1, 1),
+  ('microneedling', 'Microneedling', 60, 295,
+   'Collagen-induction therapy to soften scarring, smooth texture and improve firmness over time.', 1, 2);
 
 INSERT OR IGNORE INTO addons (id, name, duration_min, price_aud, active) VALUES
-  ('led', 'LED Light Therapy', 15, 25, 1);
+  ('led', 'LED Light Therapy', 15, 25, 1),
+  ('consult', 'Skin Consultation', 15, 0, 1);
