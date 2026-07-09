@@ -200,7 +200,8 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     if (!isDateStr(b.date) || startMin === null) return json({ error: 'bad_slot' }, 400, cors);
     if (name.length < 2) return json({ error: 'name_required' }, 400, cors);
     if (phone.replace(/\D/g, '').length < 8) return json({ error: 'phone_required' }, 400, cors);
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'bad_email' }, 400, cors);
+    if (!email) return json({ error: 'email_required' }, 400, cors);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'bad_email' }, 400, cors);
 
     const duration = t.duration_min + addons.reduce((s, a) => s + a.duration_min, 0);
     const price = t.price_aud + addons.reduce((s, a) => s + a.price_aud, 0);
@@ -243,6 +244,36 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       time_label: fmtTime(startMin), duration_min: duration,
       price_aud: price,
     }, 200, cors);
+  }
+
+  // Live calendar feed — subscribe in Google/Apple Calendar (key = admin token)
+  if (path === '/api/feed.ics' && req.method === 'GET') {
+    const key = url.searchParams.get('key') || '';
+    if (!env.ADMIN_TOKEN || key !== env.ADMIN_TOKEN) return new Response('forbidden', { status: 403 });
+    const now = nowInAdelaide();
+    const { results } = await db.prepare(
+      `SELECT b.*, t.name AS tname FROM bookings b JOIN treatments t ON t.id = b.treatment_id
+       WHERE b.status = 'confirmed' AND b.date BETWEEN ? AND ? ORDER BY b.date, b.start_min`
+    ).bind(addDays(now.date, -30), addDays(now.date, 90)).all();
+    const pad = (n) => String(n).padStart(2, '0');
+    const fmtIcs = (date, min) => date.replace(/-/g, '') + 'T' + pad(Math.floor(min / 60)) + pad(min % 60) + '00';
+    const escIcs = (s) => String(s || '').replace(/\\/g, '\\\\').replace(/[,;]/g, m => '\\' + m).replace(/\n/g, '\\n');
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Revive Aesthetics//Bookings//EN',
+      'CALSCALE:GREGORIAN', 'X-WR-CALNAME:Revive Bookings', 'X-WR-TIMEZONE:Australia/Adelaide'];
+    for (const b of results) {
+      lines.push('BEGIN:VEVENT',
+        `UID:${b.id}@revive-booking`,
+        `DTSTAMP:${b.created_at.replace(/[-:]/g, '').slice(0, 15)}Z`,
+        `DTSTART;TZID=Australia/Adelaide:${fmtIcs(b.date, b.start_min)}`,
+        `DTEND;TZID=Australia/Adelaide:${fmtIcs(b.date, b.end_min)}`,
+        `SUMMARY:${escIcs(b.name + ' — ' + b.tname + (b.addon_names ? ' + ' + b.addon_names : ''))}`,
+        `DESCRIPTION:${escIcs(b.phone + (b.email ? ' · ' + b.email : '') + (b.notes ? '\n' + b.notes : ''))}`,
+        'END:VEVENT');
+    }
+    lines.push('END:VCALENDAR');
+    return new Response(lines.join('\r\n'), {
+      headers: { 'content-type': 'text/calendar; charset=utf-8' },
+    });
   }
 
   if (path === '/api/booking' && req.method === 'GET') {
@@ -305,11 +336,53 @@ async function handleAdmin(req, env, url, path, cors) {
     const to = isDateStr(url.searchParams.get('to')) ? url.searchParams.get('to') : addDays(from, 30);
     const { results } = await db.prepare(
       `SELECT b.id, b.date, b.start_min, b.end_min, b.status, b.name, b.phone, b.email, b.notes,
-              b.created_at, t.name AS treatment, b.addon_names AS addon
+              b.created_at, b.addon_ids, t.name AS treatment, t.price_aud, b.addon_names AS addon
        FROM bookings b JOIN treatments t ON t.id = b.treatment_id
        WHERE b.date BETWEEN ? AND ? ORDER BY b.date, b.start_min`
     ).bind(from, to).all();
-    return json({ bookings: results.map(r => ({ ...r, time_label: fmtTime(r.start_min) })) }, 200, cors);
+    const priceOf = await makePriceOf(db);
+    return json({
+      bookings: results.map(r => ({
+        ...r, addon_ids: undefined, price_aud: priceOf(r),
+        time_label: fmtTime(r.start_min), date_label: fmtDate(r.date),
+      })),
+    }, 200, cors);
+  }
+
+  if (path === '/api/admin/clients' && req.method === 'GET') {
+    const { results } = await db.prepare(
+      `SELECT b.name, b.phone, b.email, b.date, b.notes, b.addon_ids, b.status,
+              t.name AS treatment, t.price_aud
+       FROM bookings b JOIN treatments t ON t.id = b.treatment_id
+       WHERE b.status = 'confirmed' ORDER BY b.date`
+    ).all();
+    const priceOf = await makePriceOf(db);
+    const today = nowInAdelaide().date;
+    const map = new Map();
+    for (const r of results) {
+      const key = r.phone.replace(/\D/g, '') || r.email;
+      const c = map.get(key) || {
+        name: r.name, phone: r.phone, email: '', visits: 0,
+        first_visit: null, last_visit: null, next_booking: null,
+        next_treatment: null, total_aud: 0, last_notes: '',
+      };
+      c.name = r.name;
+      if (r.email) c.email = r.email;
+      if (r.notes) c.last_notes = r.notes;
+      if (!c.first_visit || r.date < c.first_visit) c.first_visit = r.date;
+      if (r.date <= today) {
+        c.visits++;
+        c.total_aud += priceOf(r);
+        if (!c.last_visit || r.date > c.last_visit) c.last_visit = r.date;
+      } else if (!c.next_booking || r.date < c.next_booking) {
+        c.next_booking = r.date;
+        c.next_treatment = r.treatment;
+      }
+      map.set(key, c);
+    }
+    const clients = [...map.values()].sort((a, b) =>
+      (b.next_booking || b.last_visit || '').localeCompare(a.next_booking || a.last_visit || ''));
+    return json({ clients, total: clients.length }, 200, cors);
   }
 
   if (path === '/api/admin/blocked' && req.method === 'GET') {
@@ -339,4 +412,13 @@ async function handleAdmin(req, env, url, path, cors) {
   }
 
   return json({ error: 'not_found' }, 404, cors);
+}
+
+/** Returns a fn computing full price (treatment + add-ons) for a booking row
+ *  that has price_aud (treatment) and addon_ids. */
+async function makePriceOf(db) {
+  const { results: addons } = await db.prepare('SELECT id, price_aud FROM addons').all();
+  const priceMap = Object.fromEntries(addons.map(a => [a.id, a.price_aud]));
+  return (r) => r.price_aud + String(r.addon_ids || '').split(',').filter(Boolean)
+    .reduce((s, id) => s + (priceMap[id] || 0), 0);
 }

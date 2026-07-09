@@ -254,7 +254,7 @@
       <form id="book-form">
         <div class="field"><label for="f-name">Name</label><input id="f-name" required autocomplete="name" /></div>
         <div class="field"><label for="f-phone">Phone</label><input id="f-phone" type="tel" required autocomplete="tel" /></div>
-        <div class="field"><label for="f-email">Email</label><input id="f-email" type="email" autocomplete="email" /></div>
+        <div class="field"><label for="f-email">Email</label><input id="f-email" type="email" required autocomplete="email" /></div>
         <div class="field"><label for="f-notes">Anything Stefani should know? <span style="text-transform:none;letter-spacing:0;">(optional)</span></label>
           <textarea id="f-notes" placeholder="Skin concerns, first visit, current products…"></textarea></div>
         <div class="hp"><label>Website</label><input id="f-website" tabindex="-1" autocomplete="off" /></div>
@@ -498,6 +498,7 @@
           too_many_bookings: 'You already have upcoming bookings — call 0404 967 051 to add more.',
           phone_required: 'Please enter a valid phone number.',
           name_required: 'Please enter your name.',
+          email_required: 'Please enter your email address.',
           bad_email: 'That email doesn’t look right.',
         };
         $('book-msg').textContent = errs[r.data.error] || 'Something went wrong — please try again or call 0404 967 051.';

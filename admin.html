@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Studio Hub | Revive Aesthetics</title>
+<meta name="robots" content="noindex, nofollow" />
+<meta name="theme-color" content="#2B0F1A" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --plum:#2B0F1A; --plum-soft:#3c1726; --cream:#F2E7CE; --cream-bg:#f7f0df;
+    --cream-card:#fbf6ea; --gold:#c2a878; --rose:#b58a90; --ink:#2b0f1a; --muted:#6f5b58;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Jost',system-ui,sans-serif; background:var(--cream-bg); color:var(--ink); font-weight:300; line-height:1.6; min-height:100vh; }
+  h1,h2,h3 { font-family:'Cormorant Garamond',Georgia,serif; font-weight:500; }
+  a { color:inherit; }
+  .wrap { max-width:760px; margin:0 auto; padding:0 16px; }
+
+  header.top { background:var(--plum); color:var(--cream); padding:18px 0 0; position:sticky; top:0; z-index:20; }
+  .top-row { display:flex; align-items:center; justify-content:space-between; padding-bottom:12px; }
+  .top-row h1 { font-size:1.5rem; }
+  .top-row .sub { font-size:.66rem; letter-spacing:.3em; text-transform:uppercase; color:var(--gold); }
+  .tabs { display:flex; }
+  .tab { flex:1; text-align:center; padding:12px 4px; font-size:.72rem; letter-spacing:.16em; text-transform:uppercase; color:rgba(242,231,206,.65); border:none; background:none; cursor:pointer; border-bottom:2px solid transparent; font-family:'Jost',sans-serif; }
+  .tab.on { color:var(--cream); border-bottom-color:var(--gold); }
+
+  main { padding:22px 0 80px; }
+  .day-head { font-size:.7rem; letter-spacing:.24em; text-transform:uppercase; color:var(--rose); margin:26px 0 10px; display:flex; justify-content:space-between; align-items:baseline; }
+  .day-head .cnt { color:var(--muted); letter-spacing:.05em; text-transform:none; }
+  .card { background:var(--cream-card); border:1px solid rgba(43,15,26,.1); padding:16px 18px; margin-bottom:10px; }
+  .bk-row1 { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  .bk-time { font-family:'Cormorant Garamond',serif; font-size:1.35rem; }
+  .bk-price { color:var(--gold); font-family:'Cormorant Garamond',serif; font-size:1.15rem; }
+  .bk-what { font-size:.95rem; margin:2px 0 8px; }
+  .bk-name { font-weight:400; }
+  .bk-contact { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+  .pill { font-size:.74rem; padding:7px 13px; border:1px solid rgba(43,15,26,.2); background:#fff; text-decoration:none; letter-spacing:.04em; }
+  .pill:active { background:var(--plum); color:var(--cream); }
+  .bk-notes { font-size:.84rem; color:var(--muted); font-style:italic; margin-top:8px; border-left:2px solid var(--gold); padding-left:10px; }
+  .bk-cancel { background:none; border:none; color:var(--rose); font-size:.7rem; letter-spacing:.12em; text-transform:uppercase; cursor:pointer; margin-top:10px; font-family:'Jost',sans-serif; }
+  .cancelled { opacity:.45; }
+  .cancelled .bk-time { text-decoration:line-through; }
+
+  .search { width:100%; padding:13px 14px; border:1px solid rgba(43,15,26,.18); background:#fff; font-family:'Jost',sans-serif; font-size:.95rem; margin-bottom:16px; }
+  .search:focus { outline:none; border-color:var(--plum); }
+  .cl-stats { display:flex; gap:14px; font-size:.78rem; color:var(--muted); margin-top:6px; flex-wrap:wrap; }
+  .cl-stats b { color:var(--ink); font-weight:400; }
+  .badge { display:inline-block; font-size:.64rem; letter-spacing:.14em; text-transform:uppercase; padding:3px 9px; margin-left:8px; }
+  .badge.next { background:var(--plum); color:var(--gold); }
+  .badge.new1 { background:var(--gold); color:var(--plum); }
+
+  .stat-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+  .stat { background:var(--plum); color:var(--cream); text-align:center; padding:16px 8px; }
+  .stat .n { font-family:'Cormorant Garamond',serif; font-size:1.7rem; color:var(--gold); }
+  .stat .l { font-size:.62rem; letter-spacing:.18em; text-transform:uppercase; opacity:.8; }
+
+  .block-form { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
+  .block-form input { padding:12px; border:1px solid rgba(43,15,26,.18); font-family:'Jost',sans-serif; }
+  .btn { font-family:'Jost',sans-serif; letter-spacing:.14em; text-transform:uppercase; font-size:.72rem; padding:12px 22px; border:1px solid var(--plum); background:var(--plum); color:var(--cream); cursor:pointer; }
+  .btn--ghost { background:transparent; color:var(--plum); }
+
+  .lock { max-width:400px; margin:14vh auto; text-align:center; padding:0 20px; }
+  .lock h2 { font-size:1.8rem; margin-bottom:8px; }
+  .lock p { color:var(--muted); font-size:.9rem; margin-bottom:20px; }
+  .lock input { width:100%; padding:14px; border:1px solid rgba(43,15,26,.2); font-family:'Jost',sans-serif; text-align:center; margin-bottom:12px; }
+  .empty { text-align:center; color:var(--muted); padding:40px 0; font-size:.9rem; }
+  .loading { text-align:center; color:var(--muted); padding:40px 0; font-size:.8rem; letter-spacing:.14em; text-transform:uppercase; }
+</style>
+</head>
+<body>
+
+<div id="lock" class="lock" style="display:none;">
+  <h2>Studio Hub</h2>
+  <p>Enter your access code to open your diary and client list.</p>
+  <input id="code" type="password" placeholder="Access code" autocomplete="current-password" />
+  <button class="btn" id="unlock" style="width:100%;">Open</button>
+  <p id="lock-msg" style="color:#8c2f39; margin-top:10px;"></p>
+</div>
+
+<div id="app" style="display:none;">
+  <header class="top">
+    <div class="wrap">
+      <div class="top-row">
+        <div><h1>Studio Hub</h1></div>
+        <div class="sub">Revive Aesthetics</div>
+      </div>
+      <div class="tabs">
+        <button class="tab on" data-t="diary">Diary</button>
+        <button class="tab" data-t="clients">Clients</button>
+        <button class="tab" data-t="timeoff">Time Off</button>
+      </div>
+    </div>
+  </header>
+  <main class="wrap">
+    <div id="v-diary"><div class="loading">Loading your diary…</div></div>
+    <div id="v-clients" style="display:none;"><div class="loading">Loading clients…</div></div>
+    <div id="v-timeoff" style="display:none;"><div class="loading">Loading…</div></div>
+  </main>
+</div>
+
+<script>
+(function () {
+  var API = 'https://revive-booking.ampedup.workers.dev';
+  var TOKEN = localStorage.getItem('revive_admin_token') || (location.hash.length > 10 ? location.hash.slice(1) : '');
+  if (location.hash.length > 10) { localStorage.setItem('revive_admin_token', TOKEN); history.replaceState(null, '', location.pathname); }
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s || '').replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function money(n) { return '$' + Number(n || 0).toLocaleString('en-AU'); }
+  function api(path, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({ 'content-type': 'application/json', Authorization: 'Bearer ' + TOKEN }, opts.headers || {});
+    return fetch(API + path, opts).then(function (r) {
+      if (r.status === 401) { showLock('That code isn’t right — try again.'); throw new Error('unauthorised'); }
+      return r.json();
+    });
+  }
+  function showLock(msg) {
+    $('lock').style.display = 'block'; $('app').style.display = 'none';
+    $('lock-msg').textContent = msg || '';
+  }
+  function showApp() { $('lock').style.display = 'none'; $('app').style.display = 'block'; }
+
+  $('unlock').addEventListener('click', function () {
+    TOKEN = $('code').value.trim();
+    localStorage.setItem('revive_admin_token', TOKEN);
+    boot();
+  });
+  $('code').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('unlock').click(); });
+
+  document.querySelectorAll('.tab').forEach(function (t) {
+    t.addEventListener('click', function () {
+      document.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('on'); });
+      t.classList.add('on');
+      ['diary', 'clients', 'timeoff'].forEach(function (v) { $('v-' + v).style.display = v === t.dataset.t ? 'block' : 'none'; });
+    });
+  });
+
+  function dayLabel(d) {
+    var p = d.split('-'); var dt = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+    return dt.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
+  }
+  function plusDays(n) { var d = new Date(Date.now() + n * 864e5); return d.toISOString().slice(0, 10); }
+
+  // ---------- Diary ----------
+  function loadDiary() {
+    api('/api/admin/bookings?from=' + plusDays(0) + '&to=' + plusDays(62)).then(function (r) {
+      var v = $('v-diary');
+      var upcoming = r.bookings.filter(function (b) { return b.status === 'confirmed'; });
+      if (!upcoming.length) { v.innerHTML = '<div class="empty">No upcoming bookings yet.<br>Share the booking link to fill your diary ✨</div>'; return; }
+      var byDate = {};
+      upcoming.forEach(function (b) { (byDate[b.date] = byDate[b.date] || []).push(b); });
+      var revenue = upcoming.reduce(function (s, b) { return s + (b.price_aud || 0); }, 0);
+      var html = '<div class="stat-row">' +
+        '<div class="stat"><div class="n">' + upcoming.length + '</div><div class="l">Bookings</div></div>' +
+        '<div class="stat"><div class="n">' + Object.keys(byDate).length + '</div><div class="l">Days</div></div>' +
+        '<div class="stat"><div class="n">' + money(revenue) + '</div><div class="l">Booked $</div></div></div>';
+      Object.keys(byDate).sort().forEach(function (d) {
+        html += '<div class="day-head"><span>' + dayLabel(d) + '</span><span class="cnt">' + byDate[d].length + ' client' + (byDate[d].length > 1 ? 's' : '') + '</span></div>';
+        byDate[d].forEach(function (b) {
+          html += '<div class="card" id="bk-' + b.id + '">' +
+            '<div class="bk-row1"><span class="bk-time">' + b.time_label + '</span><span class="bk-price">' + money(b.price_aud) + '</span></div>' +
+            '<div class="bk-what">' + esc(b.treatment) + (b.addon ? ' + ' + esc(b.addon) : '') + '</div>' +
+            '<div class="bk-name">' + esc(b.name) + '</div>' +
+            '<div class="bk-contact">' +
+              '<a class="pill" href="tel:' + esc(b.phone) + '">☎ ' + esc(b.phone) + '</a>' +
+              '<a class="pill" href="sms:' + esc(b.phone) + '">SMS</a>' +
+              (b.email ? '<a class="pill" href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a>' : '') +
+            '</div>' +
+            (b.notes ? '<div class="bk-notes">' + esc(b.notes) + '</div>' : '') +
+            '<button class="bk-cancel" data-id="' + b.id + '" data-name="' + esc(b.name) + '">Cancel booking</button>' +
+          '</div>';
+        });
+      });
+      v.innerHTML = html;
+      v.querySelectorAll('.bk-cancel').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          if (!confirm('Cancel ' + btn.dataset.name + '’s booking?')) return;
+          api('/api/admin/cancel', { method: 'POST', body: JSON.stringify({ id: btn.dataset.id }) })
+            .then(function () { loadDiary(); });
+        });
+      });
+    }).catch(function () {});
+  }
+
+  // ---------- Clients ----------
+  function loadClients() {
+    api('/api/admin/clients').then(function (r) {
+      var v = $('v-clients');
+      if (!r.clients.length) { v.innerHTML = '<div class="empty">No clients yet — they’ll appear here as bookings come in.</div>'; return; }
+      var html = '<input class="search" id="cl-search" placeholder="Search name, phone, email…" />' +
+        '<div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;">' + r.total + ' client' + (r.total > 1 ? 's' : '') + ' · every booking captures name, phone + email</div>' +
+        '<div id="cl-list"></div>';
+      v.innerHTML = html;
+      function render(filter) {
+        var f = (filter || '').toLowerCase();
+        $('cl-list').innerHTML = r.clients.filter(function (c) {
+          return !f || (c.name + c.phone + c.email).toLowerCase().indexOf(f) > -1;
+        }).map(function (c) {
+          var badge = c.next_booking ? '<span class="badge next">Booked ' + dayLabel(c.next_booking).split(' ').slice(0, 3).join(' ') + '</span>'
+            : (c.visits === 1 ? '<span class="badge new1">1 visit</span>' : '');
+          return '<div class="card">' +
+            '<div class="bk-row1"><span class="bk-name" style="font-size:1.05rem;">' + esc(c.name) + badge + '</span>' +
+            '<span class="bk-price">' + money(c.total_aud) + '</span></div>' +
+            '<div class="cl-stats">' +
+              '<span><b>' + c.visits + '</b> visit' + (c.visits === 1 ? '' : 's') + '</span>' +
+              (c.last_visit ? '<span>last <b>' + c.last_visit + '</b></span>' : '') +
+              (c.next_booking ? '<span>next <b>' + esc(c.next_treatment || '') + '</b></span>' : '') +
+            '</div>' +
+            '<div class="bk-contact">' +
+              '<a class="pill" href="tel:' + esc(c.phone) + '">☎ ' + esc(c.phone) + '</a>' +
+              '<a class="pill" href="sms:' + esc(c.phone) + '">SMS</a>' +
+              (c.email ? '<a class="pill" href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a>' : '') +
+            '</div>' +
+            (c.last_notes ? '<div class="bk-notes">' + esc(c.last_notes) + '</div>' : '') +
+          '</div>';
+        }).join('') || '<div class="empty">No matches.</div>';
+      }
+      render('');
+      $('cl-search').addEventListener('input', function (e) { render(e.target.value); });
+    }).catch(function () {});
+  }
+
+  // ---------- Time off ----------
+  function loadTimeOff() {
+    api('/api/admin/blocked').then(function (r) {
+      var v = $('v-timeoff');
+      v.innerHTML = '<p style="font-size:.88rem;color:var(--muted);margin-bottom:14px;">Block a date and it disappears from online booking instantly — perfect for holidays or full days off.</p>' +
+        '<div class="block-form"><input type="date" id="blk-date" /><input type="text" id="blk-reason" placeholder="Reason (optional)" style="flex:1;" /><button class="btn" id="blk-add">Block Day</button></div>' +
+        (r.blocked.length ? r.blocked.map(function (b) {
+          return '<div class="card"><div class="bk-row1"><span>' + dayLabel(b.date) + (b.reason ? ' <span style="color:var(--muted);font-size:.84rem;">— ' + esc(b.reason) + '</span>' : '') + '</span>' +
+            '<button class="bk-cancel" data-date="' + b.date + '" style="margin:0;">Unblock</button></div></div>';
+        }).join('') : '<div class="empty">No days blocked.</div>');
+      $('blk-add').addEventListener('click', function () {
+        var d = $('blk-date').value;
+        if (!d) return;
+        api('/api/admin/block', { method: 'POST', body: JSON.stringify({ date: d, reason: $('blk-reason').value }) })
+          .then(loadTimeOff);
+      });
+      v.querySelectorAll('[data-date]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          api('/api/admin/unblock', { method: 'POST', body: JSON.stringify({ date: btn.dataset.date }) }).then(loadTimeOff);
+        });
+      });
+    }).catch(function () {});
+  }
+
+  function boot() {
+    if (!TOKEN) { showLock(); return; }
+    api('/api/admin/blocked').then(function () {
+      showApp(); loadDiary(); loadClients(); loadTimeOff();
+    }).catch(function () {});
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
