@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://reviveaesthetics.com.au/sitemap.xml
+Sitemap: https://reviveaestheticsadl.com.au/sitemap.xml
