@@ -12,9 +12,18 @@ CREATE TABLE IF NOT EXISTS treatments (
   sort         INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS addons (
+  id           TEXT PRIMARY KEY,
+  name         TEXT NOT NULL,
+  duration_min INTEGER NOT NULL DEFAULT 0, -- extra time added to the appointment
+  price_aud    INTEGER NOT NULL,
+  active       INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS bookings (
   id           TEXT PRIMARY KEY,
   treatment_id TEXT NOT NULL REFERENCES treatments(id),
+  addon_id     TEXT,                       -- optional, references addons(id)
   date         TEXT NOT NULL,             -- YYYY-MM-DD (Adelaide local)
   start_min    INTEGER NOT NULL,          -- minutes from midnight, Adelaide local
   end_min      INTEGER NOT NULL,
@@ -39,15 +48,18 @@ CREATE TABLE IF NOT EXISTS blocked_dates (
 );
 
 -- ============================================================
--- Seed treatments.
--- !! PRICES ARE PLACEHOLDERS — confirm with Stefani, then:
+-- Seed treatments (prices confirmed by Marcus 2026-07-09).
+-- Change a price later without redeploying:
 --    npx wrangler d1 execute revive-booking --remote \
---      --command "UPDATE treatments SET price_aud=149 WHERE id='peel'"
+--      --command "UPDATE treatments SET price_aud=155 WHERE id='peel'"
 -- ============================================================
 INSERT OR IGNORE INTO treatments (id, name, duration_min, price_aud, description, active, sort) VALUES
   ('consult', 'Skin Consultation', 30, 0,
    'A one-on-one skin assessment. We talk through your concerns and map out a treatment plan built around you.', 1, 1),
-  ('peel', 'Chemical Peel', 45, 129,
+  ('peel', 'Chemical Peel', 45, 145,
    'Professional-grade peel to resurface, brighten and refine — tailored strength for your skin type and goals.', 1, 2),
-  ('microneedling', 'Microneedling', 75, 249,
+  ('microneedling', 'Microneedling', 75, 295,
    'Collagen-induction therapy to soften scarring, smooth texture and improve firmness over time.', 1, 3);
+
+INSERT OR IGNORE INTO addons (id, name, duration_min, price_aud, active) VALUES
+  ('led', 'LED Light Therapy', 15, 25, 1);

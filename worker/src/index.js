@@ -154,13 +154,19 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     const { results } = await db.prepare(
       'SELECT id, name, duration_min, price_aud, description FROM treatments WHERE active = 1 ORDER BY sort'
     ).all();
-    return json({ treatments: results }, 200, cors);
+    const { results: addons } = await db.prepare(
+      'SELECT id, name, duration_min, price_aud FROM addons WHERE active = 1'
+    ).all();
+    return json({ treatments: results, addons }, 200, cors);
   }
 
   if (path === '/api/availability' && req.method === 'GET') {
     const tId = url.searchParams.get('treatment');
     const t = await db.prepare('SELECT * FROM treatments WHERE id = ? AND active = 1').bind(tId).first();
     if (!t) return json({ error: 'unknown_treatment' }, 400, cors);
+    const addon = await lookupAddon(db, url.searchParams.get('addon'));
+    if (addon === undefined) return json({ error: 'unknown_addon' }, 400, cors);
+    const duration = t.duration_min + (addon ? addon.duration_min : 0);
     const now = nowInAdelaide();
     let from = url.searchParams.get('from');
     if (!isDateStr(from) || from < now.date) from = now.date;
@@ -171,10 +177,10 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       const d = addDays(from, i);
       if (d > lastAllowed) break;
       if (!OPEN_DAYS.includes(dayOfWeek(d))) continue; // cheap skip before hitting D1
-      const slots = await slotsForDate(db, d, t.duration_min, now.abs);
+      const slots = await slotsForDate(db, d, duration, now.abs);
       if (slots.length) dates[d] = slots.map(m => ({ min: m, label: fmtTime(m) }));
     }
-    return json({ treatment: t.id, duration_min: t.duration_min, dates }, 200, cors);
+    return json({ treatment: t.id, duration_min: duration, dates }, 200, cors);
   }
 
   if (path === '/api/book' && req.method === 'POST') {
@@ -182,6 +188,8 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     if (b.website) return json({ ok: true }, 200, cors); // honeypot: pretend success
 
     const t = await db.prepare('SELECT * FROM treatments WHERE id = ? AND active = 1').bind(b.treatment).first();
+    const addon = await lookupAddon(db, b.addon);
+    if (addon === undefined) return json({ error: 'unknown_addon' }, 400, cors);
     const startMin = parseHHMM(b.time) ?? (Number.isInteger(b.start_min) ? b.start_min : null);
     const name = String(b.name || '').trim();
     const phone = String(b.phone || '').trim();
@@ -194,8 +202,9 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     if (phone.replace(/\D/g, '').length < 8) return json({ error: 'phone_required' }, 400, cors);
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'bad_email' }, 400, cors);
 
+    const duration = t.duration_min + (addon ? addon.duration_min : 0);
     const now = nowInAdelaide();
-    const open = await slotsForDate(db, b.date, t.duration_min, now.abs);
+    const open = await slotsForDate(db, b.date, duration, now.abs);
     if (!open.includes(startMin)) return json({ error: 'slot_unavailable' }, 409, cors);
 
     // gentle abuse cap: max 2 upcoming bookings per phone/email
@@ -208,9 +217,9 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     const cancelToken = crypto.randomUUID();
     try {
       await db.prepare(
-        `INSERT INTO bookings (id, treatment_id, date, start_min, end_min, name, phone, email, notes, cancel_token, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(id, t.id, b.date, startMin, startMin + t.duration_min, name, phone, email, notes,
+        `INSERT INTO bookings (id, treatment_id, addon_id, date, start_min, end_min, name, phone, email, notes, cancel_token, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(id, t.id, addon ? addon.id : null, b.date, startMin, startMin + duration, name, phone, email, notes,
              cancelToken, new Date().toISOString()).run();
     } catch (e) {
       if (String(e.message || e).includes('UNIQUE')) return json({ error: 'slot_unavailable' }, 409, cors);
@@ -219,7 +228,7 @@ async function handlePublic(req, env, ctx, url, path, cors) {
 
     ctx.waitUntil(telegram(env,
       `\u{1F33F} <b>New Revive booking</b>\n` +
-      `${t.name} — ${fmtDate(b.date)}, ${fmtTime(startMin)} (${t.duration_min} min)\n` +
+      `${t.name}${addon ? ' + ' + addon.name : ''} — ${fmtDate(b.date)}, ${fmtTime(startMin)} (${duration} min · $${t.price_aud + (addon ? addon.price_aud : 0)})\n` +
       `${name} · ${phone}${email ? ' · ' + email : ''}` +
       (notes ? `\nNotes: ${notes}` : '') +
       `\nRef ${id}`
@@ -227,8 +236,10 @@ async function handlePublic(req, env, ctx, url, path, cors) {
 
     return json({
       ok: true, id, cancel_token: cancelToken,
-      treatment: t.name, date: b.date, date_label: fmtDate(b.date),
-      time_label: fmtTime(startMin), duration_min: t.duration_min, price_aud: t.price_aud,
+      treatment: t.name, addon: addon ? addon.name : null,
+      date: b.date, date_label: fmtDate(b.date),
+      time_label: fmtTime(startMin), duration_min: duration,
+      price_aud: t.price_aud + (addon ? addon.price_aud : 0),
     }, 200, cors);
   }
 
@@ -236,7 +247,7 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     const row = await lookupBooking(db, url.searchParams.get('id'), url.searchParams.get('token'));
     if (!row) return json({ error: 'not_found' }, 404, cors);
     return json({
-      id: row.id, status: row.status, treatment: row.tname,
+      id: row.id, status: row.status, treatment: row.tname + (row.aname ? ' + ' + row.aname : ''),
       date: row.date, date_label: fmtDate(row.date), time_label: fmtTime(row.start_min), name: row.name,
     }, 200, cors);
   }
@@ -249,7 +260,7 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       await db.prepare("UPDATE bookings SET status='cancelled', cancelled_at=? WHERE id=?")
         .bind(new Date().toISOString(), row.id).run();
       ctx.waitUntil(telegram(env,
-        `❌ <b>Revive booking cancelled</b>\n${row.tname} — ${fmtDate(row.date)}, ${fmtTime(row.start_min)}\n${row.name} · ${row.phone}\nRef ${row.id}`
+        `❌ <b>Revive booking cancelled</b>\n${row.tname}${row.aname ? ' + ' + row.aname : ''} — ${fmtDate(row.date)}, ${fmtTime(row.start_min)}\n${row.name} · ${row.phone}\nRef ${row.id}`
       ));
     }
     return json({ ok: true, status: 'cancelled' }, 200, cors);
@@ -261,9 +272,18 @@ async function handlePublic(req, env, ctx, url, path, cors) {
 async function lookupBooking(db, id, token) {
   if (!id || !token) return null;
   return db.prepare(
-    `SELECT b.*, t.name AS tname FROM bookings b JOIN treatments t ON t.id = b.treatment_id
+    `SELECT b.*, t.name AS tname, a.name AS aname
+     FROM bookings b JOIN treatments t ON t.id = b.treatment_id
+     LEFT JOIN addons a ON a.id = b.addon_id
      WHERE b.id = ? AND b.cancel_token = ?`
   ).bind(String(id), String(token)).first();
+}
+
+/** null = no addon requested; undefined = requested but unknown/inactive */
+async function lookupAddon(db, id) {
+  if (!id) return null;
+  const a = await db.prepare('SELECT * FROM addons WHERE id = ? AND active = 1').bind(String(id)).first();
+  return a || undefined;
 }
 
 // ---------- admin routes ----------
@@ -276,8 +296,9 @@ async function handleAdmin(req, env, url, path, cors) {
     const to = isDateStr(url.searchParams.get('to')) ? url.searchParams.get('to') : addDays(from, 30);
     const { results } = await db.prepare(
       `SELECT b.id, b.date, b.start_min, b.end_min, b.status, b.name, b.phone, b.email, b.notes,
-              b.created_at, t.name AS treatment
+              b.created_at, t.name AS treatment, a.name AS addon
        FROM bookings b JOIN treatments t ON t.id = b.treatment_id
+       LEFT JOIN addons a ON a.id = b.addon_id
        WHERE b.date BETWEEN ? AND ? ORDER BY b.date, b.start_min`
     ).bind(from, to).all();
     return json({ bookings: results.map(r => ({ ...r, time_label: fmtTime(r.start_min) })) }, 200, cors);

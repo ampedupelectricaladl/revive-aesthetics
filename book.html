@@ -117,6 +117,14 @@
   .chip.sel { background: var(--plum); color: var(--cream); border-color: var(--plum); }
   .chip .dow { display: block; font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--rose); }
   .chip.sel .dow { color: var(--gold); }
+  .addon-chip { display: inline-flex; align-items: center; gap: 10px; }
+  .addon-chip .box {
+    width: 16px; height: 16px; border: 1px solid rgba(43,15,26,0.35); display: inline-flex;
+    align-items: center; justify-content: center; font-size: 11px; line-height: 1; transition: all .2s;
+  }
+  .addon-chip.sel .box { background: var(--gold); border-color: var(--gold); color: var(--plum); }
+  .addon-chip .plus { color: var(--rose); font-size: 0.78rem; }
+  .addon-chip.sel .plus { color: var(--gold); }
   .times { margin-top: 30px; }
   .times h3 { text-align: center; font-size: 1.25rem; margin-bottom: 16px; }
   .month-lbl { width: 100%; text-align: center; font-size: 0.7rem; letter-spacing: 0.26em; text-transform: uppercase; color: var(--muted); margin: 18px 0 4px; }
@@ -224,6 +232,7 @@
     <div class="panel" id="p-time">
       <h2>Pick a time</h2>
       <p class="sub" id="time-sub"></p>
+      <div class="chips" id="addon-wrap" style="margin-bottom:30px;"></div>
       <div class="loading" id="a-loading">Checking availability…</div>
       <div class="chips" id="date-chips"></div>
       <div class="times" id="time-wrap" style="display:none;">
@@ -300,7 +309,7 @@
 <script>
 (function () {
   var API = window.REVIVE_API_BASE;
-  var state = { treatment: null, availability: null, date: null, min: null, timeLabel: '' };
+  var state = { treatment: null, addon: null, addons: [], availability: null, date: null, min: null, timeLabel: '' };
   document.getElementById('yr').textContent = new Date().getFullYear();
 
   function $(id) { return document.getElementById(id); }
@@ -365,6 +374,7 @@
 
   api('/api/treatments').then(function (r) {
     $('t-loading').style.display = 'none';
+    state.addons = r.data.addons || [];
     var grid = $('t-grid');
     r.data.treatments.forEach(function (t) {
       var card = document.createElement('div');
@@ -377,13 +387,43 @@
     });
   }).catch(function () { show('p-offline', null); });
 
+  function updateTimeSub() {
+    var t = state.treatment, a = state.addon;
+    var dur = t.duration_min + (a ? a.duration_min : 0);
+    var price = t.price_aud + (a ? a.price_aud : 0);
+    $('time-sub').textContent = t.name + (a ? ' + ' + a.name : '') + ' · ' + dur + ' min' + (price > 0 ? ' · $' + price : '');
+  }
+
+  function renderAddons() {
+    var wrap = $('addon-wrap'); wrap.innerHTML = '';
+    state.addons.forEach(function (a) {
+      var c = document.createElement('button');
+      c.className = 'chip addon-chip'; c.type = 'button';
+      c.innerHTML = '<span class="box">' + (state.addon && state.addon.id === a.id ? '✓' : '') + '</span>' +
+        'Add ' + a.name + ' <span class="plus">+$' + a.price_aud + ' · +' + a.duration_min + ' min</span>';
+      c.classList.toggle('sel', !!(state.addon && state.addon.id === a.id));
+      c.addEventListener('click', function () {
+        state.addon = (state.addon && state.addon.id === a.id) ? null : a;
+        renderAddons(); updateTimeSub(); loadAvailability();
+      });
+      wrap.appendChild(c);
+    });
+  }
+
   function pickTreatment(t) {
-    state.treatment = t; state.date = null; state.min = null;
-    $('time-sub').textContent = t.name + ' · ' + t.duration_min + ' min' + (t.price_aud > 0 ? ' · $' + t.price_aud : '');
+    state.treatment = t; state.addon = null;
+    updateTimeSub(); renderAddons();
+    show('p-time', 2);
+    loadAvailability();
+  }
+
+  function loadAvailability() {
+    state.date = null; state.min = null;
     $('date-chips').innerHTML = ''; $('time-wrap').style.display = 'none'; $('time-msg').textContent = '';
     $('a-loading').style.display = 'block';
-    show('p-time', 2);
-    api('/api/availability?treatment=' + encodeURIComponent(t.id)).then(function (r) {
+    var q = '/api/availability?treatment=' + encodeURIComponent(state.treatment.id) +
+            (state.addon ? '&addon=' + encodeURIComponent(state.addon.id) : '');
+    api(q).then(function (r) {
       $('a-loading').style.display = 'none';
       state.availability = r.data.dates || {};
       var dates = Object.keys(state.availability);
@@ -420,8 +460,9 @@
       c.className = 'chip'; c.type = 'button'; c.textContent = s.label;
       c.addEventListener('click', function () {
         state.min = s.min; state.timeLabel = s.label;
-        $('sum-what').textContent = state.treatment.name;
-        $('sum-when').textContent = f.dow + ' ' + f.day + ' · ' + s.label;
+        var price = state.treatment.price_aud + (state.addon ? state.addon.price_aud : 0);
+        $('sum-what').textContent = state.treatment.name + (state.addon ? ' + ' + state.addon.name : '');
+        $('sum-when').textContent = f.dow + ' ' + f.day + ' · ' + s.label + (price > 0 ? ' · $' + price : '');
         $('book-msg').textContent = '';
         show('p-details', 3);
       });
@@ -437,7 +478,8 @@
     api('/api/book', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        treatment: state.treatment.id, date: state.date, start_min: state.min,
+        treatment: state.treatment.id, addon: state.addon ? state.addon.id : null,
+        date: state.date, start_min: state.min,
         name: $('f-name').value, phone: $('f-phone').value,
         email: $('f-email').value, notes: $('f-notes').value,
         website: $('f-website').value,
@@ -453,18 +495,18 @@
           bad_email: 'That email doesn’t look right.',
         };
         $('book-msg').textContent = errs[r.data.error] || 'Something went wrong — please try again or call 0404 967 051.';
-        if (r.data.error === 'slot_unavailable') pickTreatment(state.treatment);
+        if (r.data.error === 'slot_unavailable') { show('p-time', 2); loadAvailability(); $('time-msg').textContent = errs.slot_unavailable; }
         return;
       }
       var b = r.data;
-      $('done-what').textContent = b.treatment;
+      $('done-what').textContent = b.treatment + (b.addon ? ' + ' + b.addon : '');
       $('done-when').textContent = b.date_label + ' · ' + b.time_label;
       var start = b.date.replace(/-/g, '') + 'T' + String(Math.floor(state.min / 60)).padStart(2, '0') + String(state.min % 60).padStart(2, '0') + '00';
       var endMin = state.min + b.duration_min;
       var end = b.date.replace(/-/g, '') + 'T' + String(Math.floor(endMin / 60)).padStart(2, '0') + String(endMin % 60).padStart(2, '0') + '00';
       var cancelUrl = location.origin + location.pathname + '?cancel=' + b.id + '&token=' + b.cancel_token;
       $('gcal-link').href = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
-        '&text=' + encodeURIComponent(b.treatment + ' — Revive Aesthetics') +
+        '&text=' + encodeURIComponent(b.treatment + (b.addon ? ' + ' + b.addon : '') + ' — Revive Aesthetics') +
         '&dates=' + start + '/' + end + '&ctz=Australia/Adelaide' +
         '&details=' + encodeURIComponent('Revive Aesthetics, Adelaide\nCancel/change: ' + cancelUrl) +
         '&location=' + encodeURIComponent('Adelaide SA');
