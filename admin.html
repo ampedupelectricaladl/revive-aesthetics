@@ -50,6 +50,9 @@
   .badge { display:inline-block; font-size:.64rem; letter-spacing:.14em; text-transform:uppercase; padding:3px 9px; margin-left:8px; }
   .badge.next { background:var(--plum); color:var(--gold); }
   .badge.new1 { background:var(--gold); color:var(--plum); }
+  .badge.flag { background:#8c2f39; color:#fff; }
+  .badge.form { background:#e7dcc0; color:#6f5b58; }
+  .bk-notes.flag { border-left-color:#8c2f39; color:#7a2a33; font-style:normal; }
 
   .stat-row { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
   .stat { background:var(--plum); color:var(--cream); text-align:center; padding:16px 8px; }
@@ -201,8 +204,12 @@
         }).map(function (c) {
           var badge = c.next_booking ? '<span class="badge next">Booked ' + dayLabel(c.next_booking).split(' ').slice(0, 3).join(' ') + '</span>'
             : (c.visits === 1 ? '<span class="badge new1">1 visit</span>' : '');
+          var hasFlags = c.intake && c.intake.flags && c.intake.flags.length;
+          var formBadge = c.intake ? (hasFlags
+            ? '<span class="badge flag">⚠ ' + esc(c.intake.flags.join(', ')) + '</span>'
+            : '<span class="badge form">form ✓</span>') : '';
           return '<div class="card">' +
-            '<div class="bk-row1"><span class="bk-name" style="font-size:1.05rem;">' + esc(c.name) + badge + '</span>' +
+            '<div class="bk-row1"><span class="bk-name" style="font-size:1.05rem;">' + esc(c.name) + badge + formBadge + '</span>' +
             '<span class="bk-price">' + money(c.total_aud) + '</span></div>' +
             '<div class="cl-stats">' +
               '<span><b>' + c.visits + '</b> visit' + (c.visits === 1 ? '' : 's') + '</span>' +
@@ -214,6 +221,7 @@
               '<a class="pill" href="sms:' + esc(c.phone) + '">SMS</a>' +
               (c.email ? '<a class="pill" href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a>' : '') +
             '</div>' +
+            (c.intake && c.intake.summary ? '<div class="bk-notes' + (hasFlags ? ' flag' : '') + '">Pre-treatment form (' + esc(c.intake.date) + '): ' + esc(c.intake.summary) + '</div>' : '') +
             (c.last_notes ? '<div class="bk-notes">' + esc(c.last_notes) + '</div>' : '') +
           '</div>';
         }).join('') || '<div class="empty">No matches.</div>';

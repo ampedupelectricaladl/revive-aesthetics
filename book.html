@@ -272,9 +272,13 @@
         </svg>
         <h2>You're booked in</h2>
         <p class="detail"><strong id="done-what"></strong><span id="done-when"></span></p>
-        <p class="note">A reminder will come closer to the day. Need to change or cancel? Use the link below — or just call Stefani on <a href="tel:0404967051" style="text-decoration:underline;">0404 967 051</a>.</p>
+        <p class="note">One quick thing before your visit — please fill in your short pre-treatment form so Stefani can tailor your treatment. It only takes a couple of minutes.</p>
+        <div class="done-actions" style="margin-bottom:22px;">
+          <a class="btn" id="intake-link" href="intake.html">Complete pre-treatment form</a>
+        </div>
+        <p class="note" style="margin-top:0;">A reminder will come closer to the day. Need to change or cancel? Use the link below — or just call Stefani on <a href="tel:0404967051" style="text-decoration:underline;">0404 967 051</a>.</p>
         <div class="done-actions">
-          <a class="btn" id="gcal-link" target="_blank" rel="noopener">Add to Google Calendar</a>
+          <a class="btn" style="background:transparent;color:var(--plum);" id="gcal-link" target="_blank" rel="noopener">Add to Google Calendar</a>
           <a class="btn" style="background:transparent;color:var(--plum);" id="cancel-link">Cancel / Change</a>
         </div>
       </div>
@@ -512,6 +516,10 @@
       var endMin = state.min + b.duration_min;
       var end = b.date.replace(/-/g, '') + 'T' + String(Math.floor(endMin / 60)).padStart(2, '0') + String(endMin % 60).padStart(2, '0') + '00';
       var cancelUrl = location.origin + location.pathname + '?cancel=' + b.id + '&token=' + b.cancel_token;
+      $('intake-link').href = 'intake.html?booking=' + encodeURIComponent(b.id) +
+        '&name=' + encodeURIComponent($('f-name').value) +
+        '&phone=' + encodeURIComponent($('f-phone').value) +
+        '&email=' + encodeURIComponent($('f-email').value);
       $('gcal-link').href = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
         '&text=' + encodeURIComponent(b.treatment + (b.addon ? ' + ' + b.addon : '') + ' — Revive Aesthetics') +
         '&dates=' + start + '/' + end + '&ctz=Australia/Adelaide' +

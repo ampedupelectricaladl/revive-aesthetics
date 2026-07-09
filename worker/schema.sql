@@ -56,11 +56,31 @@ CREATE TABLE IF NOT EXISTS blocked_dates (
 --      --command "UPDATE treatments SET price_aud=155 WHERE id='peel'"
 -- ============================================================
 INSERT OR IGNORE INTO treatments (id, name, duration_min, price_aud, description, active, sort) VALUES
-  ('peel', 'Chemical Peel', 45, 145,
+  ('peel', 'Chemical Peel', 45, 155,
    'Professional-grade peel to resurface, brighten and refine — tailored strength for your skin type and goals.', 1, 1),
-  ('microneedling', 'PDRN Microneedling Booster', 60, 290,
+  ('microneedling', 'PDRN Microneedling Booster', 60, 299,
    'Collagen-induction microneedling boosted with PDRN — supports skin repair, softens scarring, smooths texture and improves firmness for a fresher, plumper complexion.', 1, 2);
 
 INSERT OR IGNORE INTO addons (id, name, duration_min, price_aud, active) VALUES
   ('led', 'LED Light Therapy', 15, 25, 1),
   ('consult', 'Skin Consultation', 15, 0, 1);
+
+-- ============================================================
+-- Pre-consultation / client intake forms.
+-- One row per submission. `summary` + `flags` are built by the
+-- worker at submit time so the Studio Hub can show the safety-
+-- critical answers without parsing `payload` (the full JSON).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS intake_forms (
+  id           TEXT PRIMARY KEY,
+  booking_id   TEXT,                        -- optional link to a booking
+  name         TEXT NOT NULL,
+  phone        TEXT NOT NULL DEFAULT '',    -- normalised digits used to match a client
+  email        TEXT NOT NULL DEFAULT '',
+  summary      TEXT NOT NULL DEFAULT '',    -- human-readable one-liner for the diary/client card
+  flags        TEXT NOT NULL DEFAULT '',    -- comma-separated hard contraindications, e.g. "pregnancy,accutane"
+  payload      TEXT NOT NULL DEFAULT '{}',  -- full answers as JSON
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_intake_phone ON intake_forms(phone);
+CREATE INDEX IF NOT EXISTS ix_intake_created ON intake_forms(created_at);

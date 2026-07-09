@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pre-Treatment Form | Revive Aesthetics — Adelaide</title>
+<meta name="description" content="Complete your confidential pre-treatment consultation form before your appointment at Revive Aesthetics, Adelaide." />
+<meta name="theme-color" content="#2B0F1A" />
+<meta name="robots" content="noindex, nofollow" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --plum: #2B0F1A; --plum-soft: #3c1726; --cream: #F2E7CE; --cream-bg: #f7f0df;
+    --cream-card: #fbf6ea; --gold: #c2a878; --rose: #b58a90; --ink: #2b0f1a; --muted: #6f5b58;
+    --maxw: 760px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Jost', system-ui, sans-serif; color: var(--ink);
+    background: var(--cream-bg); line-height: 1.7; font-weight: 300;
+    -webkit-font-smoothing: antialiased; min-height: 100vh; display: flex; flex-direction: column;
+  }
+  h1, h2, h3 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; line-height: 1.1; }
+  a { color: inherit; }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; width: 100%; }
+  .eyebrow { font-size: 0.72rem; letter-spacing: 0.32em; text-transform: uppercase; font-weight: 400; color: var(--rose); margin-bottom: 12px; }
+
+  header.nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(43,15,26,0.96); backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(242,231,206,0.14);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+  .brand-logo { height: 36px; width: auto; }
+  .monogram { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 1.6rem; color: var(--cream); }
+  .nav-back { color: var(--cream); font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.82; }
+  .nav-back:hover { opacity: 1; }
+
+  .page-head { background: var(--plum); color: var(--cream); text-align: center; padding: 56px 0 50px; }
+  .page-head h1 { font-size: clamp(2rem, 6vw, 3rem); }
+  .page-head h1 em { font-style: italic; color: var(--gold); }
+  .page-head p { color: rgba(242,231,206,0.78); margin-top: 14px; font-size: 0.96rem; max-width: 520px; margin-left: auto; margin-right: auto; }
+
+  main { flex: 1; padding: 40px 0 90px; }
+
+  .intro {
+    background: var(--cream-card); border: 1px solid rgba(43,15,26,0.1); border-left: 3px solid var(--gold);
+    padding: 18px 22px; margin-bottom: 34px; font-size: 0.92rem; color: var(--muted);
+  }
+
+  .sec { margin-bottom: 42px; }
+  .sec > .eyebrow { color: var(--gold); }
+  .sec h2 { font-size: 1.55rem; margin-bottom: 6px; }
+  .sec .hint { color: var(--muted); font-size: 0.88rem; margin-bottom: 22px; }
+
+  .field { display: grid; gap: 6px; margin-bottom: 18px; }
+  label.lbl, .q-label { font-size: 0.9rem; color: var(--ink); font-weight: 400; }
+  .field .sub { font-size: 0.78rem; color: var(--muted); }
+  input[type=text], input[type=tel], input[type=email], textarea, select {
+    font-family: 'Jost', sans-serif; font-size: 0.98rem; padding: 12px 14px;
+    border: 1px solid rgba(43,15,26,0.18); background: #fff; color: var(--ink); border-radius: 0; width: 100%;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--plum); }
+  textarea { resize: vertical; min-height: 72px; }
+
+  /* checkbox grid */
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px 16px; margin-top: 6px; }
+  .opt {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border: 1px solid rgba(43,15,26,0.14); background: #fff; cursor: pointer; font-size: 0.92rem; transition: all .15s;
+  }
+  .opt:hover { border-color: var(--gold); }
+  .opt input { accent-color: var(--plum); width: 16px; height: 16px; }
+  .opt.checked { border-color: var(--plum); background: var(--cream-card); }
+
+  /* yes / no rows */
+  .q { padding: 14px 0; border-bottom: 1px solid rgba(43,15,26,0.08); display: flex; justify-content: space-between; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .q:last-child { border-bottom: none; }
+  .q-label { flex: 1; min-width: 220px; }
+  .yn { display: flex; gap: 8px; flex-shrink: 0; }
+  .yn label {
+    display: inline-flex; align-items: center; gap: 7px; padding: 8px 15px;
+    border: 1px solid rgba(43,15,26,0.2); cursor: pointer; font-size: 0.82rem; letter-spacing: 0.04em; background: #fff; transition: all .15s;
+  }
+  .yn label:hover { border-color: var(--gold); }
+  .yn input { display: none; }
+  .yn label.on { background: var(--plum); color: var(--cream); border-color: var(--plum); }
+  .yn label.on.warn { background: #8c2f39; border-color: #8c2f39; }
+
+  .flag-note {
+    display: none; margin-top: 16px; padding: 14px 18px; background: #fceeef;
+    border: 1px solid #e3b8bd; color: #7a2a33; font-size: 0.88rem;
+  }
+  .flag-note.show { display: block; }
+
+  .consent { background: var(--cream-card); border: 1px solid rgba(43,15,26,0.1); padding: 22px 24px; }
+  .consent .opt { border: none; background: none; padding: 8px 0; align-items: flex-start; }
+  .consent .opt:hover { border: none; }
+  .consent .opt input { margin-top: 3px; }
+
+  .btn {
+    display: inline-block; font-family: 'Jost', sans-serif; font-weight: 400;
+    letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.74rem;
+    padding: 15px 40px; border: 1px solid var(--plum); cursor: pointer;
+    transition: all .25s ease; background: var(--plum); color: var(--cream);
+  }
+  .btn:hover { background: transparent; color: var(--plum); }
+  .btn[disabled] { opacity: .45; pointer-events: none; }
+
+  .submit-row { margin-top: 30px; text-align: center; }
+  .msg { text-align: center; padding: 12px; font-size: 0.9rem; }
+  .msg.err { color: #8c2f39; }
+
+  .done-card { background: var(--cream-card); border: 1px solid var(--gold); text-align: center; padding: 56px 34px; display: none; }
+  .done-card.show { display: block; }
+  .done-card .tick { width: 54px; height: 54px; margin: 0 auto 20px; color: var(--gold); }
+  .done-card h2 { font-size: 2rem; margin-bottom: 10px; }
+  .done-card p { color: var(--muted); font-size: 0.96rem; max-width: 440px; margin: 0 auto 8px; }
+
+  footer.site { background: var(--plum); color: var(--cream); text-align: center; padding: 40px 0 34px; border-top: 1px solid rgba(242,231,206,0.12); }
+  footer.site .copy { font-size: 0.72rem; color: rgba(242,231,206,0.5); letter-spacing: 0.04em; }
+
+  @media (max-width: 560px) { .q { align-items: flex-start; } }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="index.html" style="display:flex;align-items:center;gap:12px;">
+      <img src="assets/logo-mark-cream.png" alt="Revive Aesthetics" class="brand-logo"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='inline';" />
+      <span class="monogram" style="display:none;">RA</span>
+    </a>
+    <a class="nav-back" href="index.html">&larr; Back to site</a>
+  </div>
+</header>
+
+<section class="page-head">
+  <div class="wrap">
+    <p class="eyebrow" style="color:var(--rose);">Before your visit</p>
+    <h1>Pre-treatment <em>form</em></h1>
+    <p>A few questions so your treatment is safe and tailored to your skin. Takes about 2 minutes — everything is kept private.</p>
+  </div>
+</section>
+
+<main>
+  <div class="wrap">
+
+    <div class="intro" id="form-intro">
+      Chemical peels and microneedling work with the surface of your skin, so this quick health check lets Stefani choose the right
+      treatment and strength for you. If anything needs a closer look, she'll simply have a chat with you before your appointment.
+    </div>
+
+    <form id="intake-form" novalidate>
+
+      <!-- A. About you -->
+      <div class="sec">
+        <p class="eyebrow">Section 1</p>
+        <h2>About you</h2>
+        <div class="field"><label class="lbl" for="f-name">Full name</label><input type="text" id="f-name" autocomplete="name" required /></div>
+        <div class="field"><label class="lbl" for="f-phone">Phone</label><input type="tel" id="f-phone" autocomplete="tel" required /></div>
+        <div class="field"><label class="lbl" for="f-email">Email</label><input type="email" id="f-email" autocomplete="email" required /></div>
+      </div>
+
+      <!-- B. Your skin -->
+      <div class="sec">
+        <p class="eyebrow">Section 2</p>
+        <h2>Your skin</h2>
+        <p class="hint">Helps shape your treatment plan.</p>
+
+        <div class="field">
+          <label class="lbl">What would you most like to work on? <span class="sub">(tick all that apply)</span></label>
+          <div class="opts" data-group="concerns">
+            <label class="opt"><input type="checkbox" value="Acne / breakouts">Acne / breakouts</label>
+            <label class="opt"><input type="checkbox" value="Acne scarring">Acne scarring</label>
+            <label class="opt"><input type="checkbox" value="Pigmentation / melasma">Pigmentation / melasma</label>
+            <label class="opt"><input type="checkbox" value="Fine lines & wrinkles">Fine lines &amp; wrinkles</label>
+            <label class="opt"><input type="checkbox" value="Dullness / texture">Dullness / uneven texture</label>
+            <label class="opt"><input type="checkbox" value="Redness / rosacea">Redness / rosacea</label>
+            <label class="opt"><input type="checkbox" value="Enlarged pores">Enlarged pores</label>
+            <label class="opt"><input type="checkbox" value="Dryness / dehydration">Dryness / dehydration</label>
+            <label class="opt"><input type="checkbox" value="General glow & maintenance">General glow &amp; maintenance</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="lbl" for="f-skin">How would you describe your skin type?</label>
+          <select id="f-skin">
+            <option value="">Please choose…</option>
+            <option>Dry</option><option>Oily</option><option>Combination</option><option>Normal</option><option>Sensitive</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="lbl" for="f-fitz">Skin tone <span class="sub">(so peel strength is chosen safely)</span></label>
+          <select id="f-fitz">
+            <option value="">Please choose…</option>
+            <option value="I — Very fair, always burns, never tans">Very fair — always burns, never tans</option>
+            <option value="II — Fair, usually burns, tans minimally">Fair — usually burns, tans a little</option>
+            <option value="III — Medium, sometimes burns, tans gradually">Medium — sometimes burns, tans gradually</option>
+            <option value="IV — Olive, rarely burns, tans easily">Olive — rarely burns, tans easily</option>
+            <option value="V — Brown, very rarely burns">Brown — very rarely burns</option>
+            <option value="VI — Deeply pigmented, never burns">Deep — never burns</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="lbl" for="f-routine">Current skincare / active ingredients <span class="sub">(retinol, vitamin C, AHAs — optional)</span></label>
+          <textarea id="f-routine" placeholder="e.g. vitamin C serum in the morning, retinol 2x a week…"></textarea>
+        </div>
+      </div>
+
+      <!-- C. Health & safety -->
+      <div class="sec">
+        <p class="eyebrow">Section 3</p>
+        <h2>Health &amp; safety</h2>
+        <p class="hint">Please answer honestly — this keeps your treatment safe. A "yes" doesn't always rule a treatment out; it just means Stefani will check a couple of things first.</p>
+
+        <div class="q"><span class="q-label">Are you pregnant, trying to conceive, or breastfeeding?</span>
+          <div class="yn" data-warn="1"><label><input type="radio" name="pregnant" value="yes">Yes</label><label><input type="radio" name="pregnant" value="no">No</label></div></div>
+
+        <div class="q"><span class="q-label">Have you taken Roaccutane / isotretinoin in the last 12 months?</span>
+          <div class="yn" data-warn="1"><label><input type="radio" name="accutane" value="yes">Yes</label><label><input type="radio" name="accutane" value="no">No</label></div></div>
+
+        <div class="q"><span class="q-label">Are you currently using retinol, tretinoin or Differin?</span>
+          <div class="yn"><label><input type="radio" name="retinoids" value="yes">Yes</label><label><input type="radio" name="retinoids" value="no">No</label></div></div>
+
+        <div class="q"><span class="q-label">Any history of keloid or raised (hypertrophic) scarring?</span>
+          <div class="yn" data-warn="1"><label><input type="radio" name="keloid" value="yes">Yes</label><label><input type="radio" name="keloid" value="no">No</label></div></div>
+
+        <div class="q"><span class="q-label">History of cold sores / facial herpes?</span>
+          <div class="yn" data-warn="1"><label><input type="radio" name="coldsores" value="yes">Yes</label><label><input type="radio" name="coldsores" value="no">No</label></div></div>
+
+        <div class="q"><span class="q-label">Any active skin infection, open wound, sunburn or breakout in the treatment area right now?</span>
+          <div class="yn" data-warn="1"><label><input type="radio" name="infection" value="yes">Yes</label><label><input type="radio" name="infection" value="no">No</label></div></div>
+
+        <div class="q"><span class="q-label">Do you have diabetes, an autoimmune condition, immune suppression, or a bleeding/clotting disorder (or take blood thinners)?</span>
+          <div class="yn" data-warn="1"><label><input type="radio" name="healing" value="yes">Yes</label><label><input type="radio" name="healing" value="no">No</label></div></div>
+
+        <div class="flag-note" id="flag-note">
+          Thanks for letting us know. This doesn't necessarily mean you can't be treated — Stefani will just confirm a couple of details with you before your appointment.
+        </div>
+
+        <div class="field" style="margin-top:22px;">
+          <label class="lbl" for="f-meds">Current medications &amp; supplements <span class="sub">(optional)</span></label>
+          <textarea id="f-meds" placeholder="Anything you take regularly…"></textarea>
+        </div>
+        <div class="field">
+          <label class="lbl" for="f-allergies">Allergies <span class="sub">(medications, numbing cream/lidocaine, skincare, fish/salmon — relevant to PDRN)</span></label>
+          <textarea id="f-allergies" placeholder="List any known allergies, or write 'none'…"></textarea>
+        </div>
+      </div>
+
+      <!-- D. Recent treatments -->
+      <div class="sec">
+        <p class="eyebrow">Section 4</p>
+        <h2>Recent treatments &amp; sun</h2>
+        <div class="field">
+          <label class="lbl">Had any of these recently? <span class="sub">(tick all that apply)</span></label>
+          <div class="opts" data-group="recent_tx">
+            <label class="opt"><input type="checkbox" value="Botox / filler">Botox / filler</label>
+            <label class="opt"><input type="checkbox" value="Laser / IPL">Laser / IPL</label>
+            <label class="opt"><input type="checkbox" value="Peel or microneedling">Another peel / microneedling</label>
+            <label class="opt"><input type="checkbox" value="Waxing / threading">Waxing / threading (area)</label>
+            <label class="opt"><input type="checkbox" value="Facial / strong exfoliation">Facial / strong exfoliation</label>
+            <label class="opt"><input type="checkbox" value="None of these">None of these</label>
+          </div>
+        </div>
+        <div class="field"><label class="lbl" for="f-when">If yes, roughly when? <span class="sub">(optional)</span></label><input type="text" id="f-when" placeholder="e.g. filler 3 weeks ago" /></div>
+
+        <div class="q" style="margin-top:8px;"><span class="q-label">Active tan, sunbed or fake tan in the last 2 weeks?</span>
+          <div class="yn"><label><input type="radio" name="sun" value="yes">Yes</label><label><input type="radio" name="sun" value="no">No</label></div></div>
+
+        <div class="field" style="margin-top:16px;"><label class="lbl" for="f-reaction">Ever reacted badly to a peel, microneedling, numbing cream or skincare? <span class="sub">(optional)</span></label><textarea id="f-reaction" placeholder="Tell us what happened…"></textarea></div>
+      </div>
+
+      <!-- E. Lifestyle -->
+      <div class="sec">
+        <p class="eyebrow">Section 5</p>
+        <h2>A little more</h2>
+        <div class="q"><span class="q-label">Do you smoke?</span>
+          <div class="yn"><label><input type="radio" name="smoker" value="yes">Yes</label><label><input type="radio" name="smoker" value="no">No</label></div></div>
+        <div class="field" style="margin-top:16px;"><label class="lbl" for="f-sun">Daily sun exposure &amp; SPF habits <span class="sub">(optional — helps set realistic expectations)</span></label><input type="text" id="f-sun" placeholder="e.g. mostly indoors, SPF most days" /></div>
+      </div>
+
+      <!-- F. Consent -->
+      <div class="sec">
+        <p class="eyebrow">Section 6</p>
+        <h2>Consent</h2>
+        <div class="consent">
+          <label class="opt"><input type="checkbox" id="c-accurate"><span>The information above is true and accurate, and I'll let Revive know if anything changes before my appointment.</span></label>
+          <label class="opt"><input type="checkbox" id="c-course"><span>I understand results vary from person to person and often need a course of treatments for the best outcome.</span></label>
+          <label class="opt"><input type="checkbox" id="c-aftercare"><span>I understand I'll be given pre and post-care advice, and I agree to the cancellation policy.</span></label>
+          <label class="opt" style="margin-top:6px;"><input type="checkbox" id="c-photo"><span>I'm happy for Revive to take before &amp; after photos for my records <em style="color:var(--muted);">(and, only if I say so on the day, for social media)</em>. <span style="color:var(--muted);">Optional.</span></span></label>
+
+          <div class="field" style="margin-top:18px;">
+            <label class="lbl" for="f-sign">Type your full name to sign</label>
+            <input type="text" id="f-sign" placeholder="Your full name" autocomplete="name" />
+          </div>
+        </div>
+      </div>
+
+      <!-- honeypot -->
+      <div style="position:absolute;left:-9999px;" aria-hidden="true"><label>Website</label><input type="text" id="f-website" tabindex="-1" autocomplete="off" /></div>
+
+      <div class="msg err" id="form-msg"></div>
+      <div class="submit-row"><button type="submit" class="btn" id="submit-btn">Submit form</button></div>
+    </form>
+
+    <div class="done-card" id="done-card">
+      <svg class="tick" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="24" cy="24" r="21"/><path d="M15 24.5l6.5 6.5L33 18"/>
+      </svg>
+      <h2>Thank you</h2>
+      <p id="done-msg">Your form is with Stefani — that's everything sorted before your visit.</p>
+      <p style="margin-top:18px;"><a href="index.html" class="btn" style="text-decoration:none;">Back to site</a></p>
+    </div>
+
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap"><div class="copy">© <span id="yr"></span> Revive Aesthetics · Adelaide, South Australia · 0404 967 051</div></div>
+</footer>
+
+<script>
+  window.REVIVE_API_BASE = "https://revive-booking.ampedup.workers.dev";
+</script>
+<script>
+(function () {
+  var API = window.REVIVE_API_BASE;
+  var $ = function (id) { return document.getElementById(id); };
+  $('yr').textContent = new Date().getFullYear();
+
+  // prefill from ?name=&phone=&email=&booking=
+  var qs = new URLSearchParams(location.search);
+  if (qs.get('name')) $('f-name').value = qs.get('name');
+  if (qs.get('phone')) $('f-phone').value = qs.get('phone');
+  if (qs.get('email')) $('f-email').value = qs.get('email');
+  var bookingId = qs.get('booking') || '';
+
+  // checkbox card highlight
+  document.querySelectorAll('.opt input[type=checkbox]').forEach(function (cb) {
+    cb.addEventListener('change', function () { cb.closest('.opt').classList.toggle('checked', cb.checked); });
+  });
+
+  // yes/no toggle styling + flag notice
+  function refreshYN() {
+    var anyWarn = false;
+    document.querySelectorAll('.yn').forEach(function (grp) {
+      var warn = grp.dataset.warn === '1';
+      grp.querySelectorAll('label').forEach(function (l) {
+        var input = l.querySelector('input');
+        l.classList.toggle('on', input.checked);
+        l.classList.toggle('warn', input.checked && warn && input.value === 'yes');
+        if (input.checked && warn && input.value === 'yes') anyWarn = true;
+      });
+    });
+    $('flag-note').classList.toggle('show', anyWarn);
+  }
+  document.querySelectorAll('.yn input').forEach(function (r) { r.addEventListener('change', refreshYN); });
+
+  function group(name) {
+    return Array.prototype.map.call(document.querySelectorAll('[data-group="' + name + '"] input:checked'), function (i) { return i.value; });
+  }
+  function radio(name) { var el = document.querySelector('input[name="' + name + '"]:checked'); return el ? el.value : ''; }
+
+  $('intake-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = $('form-msg'); msg.textContent = '';
+    var name = $('f-name').value.trim();
+    var phone = $('f-phone').value.trim();
+    var email = $('f-email').value.trim();
+    var sign = $('f-sign').value.trim();
+    if (name.length < 2) return fail('Please enter your name.');
+    if (phone.replace(/\D/g, '').length < 8) return fail('Please enter a valid phone number.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Please enter a valid email.');
+    if (!$('c-accurate').checked || !$('c-course').checked || !$('c-aftercare').checked) return fail('Please tick the three consent boxes to continue.');
+    if (sign.length < 2) return fail('Please type your name to sign.');
+
+    var body = {
+      booking_id: bookingId, name: name, phone: phone, email: email,
+      concerns: group('concerns'), skin_type: $('f-skin').value, fitzpatrick: $('f-fitz').value,
+      routine: $('f-routine').value, pregnant: radio('pregnant'), accutane: radio('accutane'),
+      retinoids: radio('retinoids'), keloid: radio('keloid'), coldsores: radio('coldsores'),
+      infection: radio('infection'), healing: radio('healing'),
+      meds: $('f-meds').value, allergies: $('f-allergies').value,
+      recent_tx: group('recent_tx'), recent_when: $('f-when').value,
+      sun: radio('sun'), prior_reaction: $('f-reaction').value,
+      smoker: radio('smoker'), sun_habits: $('f-sun').value,
+      consent_accurate: true, consent_course: true, consent_aftercare: true,
+      photo_consent: $('c-photo').checked ? 'yes' : 'no', signature: sign,
+      website: $('f-website').value,
+    };
+
+    var btn = $('submit-btn'); btn.disabled = true; btn.textContent = 'Sending…';
+    fetch(API + '/api/intake', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, data: j }; }); })
+      .then(function (r) {
+        if (!r.ok) { btn.disabled = false; btn.textContent = 'Submit form'; return fail('Something went wrong — please try again, or call Stefani on 0404 967 051.'); }
+        $('intake-form').style.display = 'none'; $('form-intro').style.display = 'none';
+        if (r.data.flagged) $('done-msg').textContent = "Your form is with Stefani. She'll be in touch to confirm a couple of details before your appointment — nothing to worry about.";
+        $('done-card').classList.add('show');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }).catch(function () {
+        btn.disabled = false; btn.textContent = 'Submit form';
+        fail('Connection problem — please try again, or call 0404 967 051.');
+      });
+
+    function fail(t) { msg.textContent = t; msg.scrollIntoView({ behavior: 'smooth', block: 'center' }); return false; }
+  });
+
+  function fail(t) { var m = $('form-msg'); m.textContent = t; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); return false; }
+})();
+</script>
+</body>
+</html>

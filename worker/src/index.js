@@ -8,8 +8,11 @@
  *   POST /api/book    {treatment,date,time,name,phone,email,notes}
  *   GET  /api/booking?id=&token=
  *   POST /api/cancel  {id,token}
+ *   POST /api/intake  {name,phone,email,booking_id,...answers}
  * Admin (Authorization: Bearer ADMIN_TOKEN):
  *   GET  /api/admin/bookings?from=&to=
+ *   GET  /api/admin/clients          (now includes latest intake per client)
+ *   GET  /api/admin/intake?id=|phone=
  *   GET  /api/admin/blocked
  *   POST /api/admin/block   {date,reason}
  *   POST /api/admin/unblock {date}
@@ -167,10 +170,17 @@ function bookingDetailsHtml(b) {
   </table>`;
 }
 
-function confirmationEmail(b, cancelUrl) {
+function confirmationEmail(b, cancelUrl, intakeUrl) {
+  const intakeBlock = intakeUrl ? `
+    <p style="line-height:1.7;margin:22px 0 12px;">One quick thing before your visit — please complete your short pre-treatment form so Stefani can tailor your treatment safely:</p>
+    <p style="text-align:center;margin:0 0 8px;">
+      <a href="${intakeUrl}" style="display:inline-block;background:#2B0F1A;color:#F2E7CE;text-decoration:none;padding:13px 30px;letter-spacing:2px;text-transform:uppercase;font-size:12px;">Complete pre-treatment form</a>
+    </p>
+    <p style="line-height:1.6;font-size:12px;color:#6f5b58;text-align:center;">Takes about 2 minutes · kept completely private</p>` : '';
   return emailShell(`You're booked in, ${b.name.split(' ')[0]}`,
     `<p style="line-height:1.7;margin:0;">Thank you for booking with Revive Aesthetics — here are your appointment details:</p>
     ${bookingDetailsHtml(b)}
+    ${intakeBlock}
     <p style="line-height:1.7;font-size:14px;color:#6f5b58;">Need to change or cancel? No stress —
     <a href="${cancelUrl}" style="color:#2B0F1A;">manage your booking here</a> or call Stefani on
     <a href="tel:0404967051" style="color:#2B0F1A;">0404 967 051</a>.</p>
@@ -370,7 +380,8 @@ async function handlePublic(req, env, ctx, url, path, cors) {
         `\nRef ${id}`
       ),
       sendEmail(env, email, `Booking confirmed: ${what}, ${fmtDate(b.date)} ${fmtTime(startMin)} — Revive Aesthetics`,
-        confirmationEmail({ name, what, dateLabel: fmtDate(b.date), timeLabel: fmtTime(startMin), duration, price }, cancelUrl)),
+        confirmationEmail({ name, what, dateLabel: fmtDate(b.date), timeLabel: fmtTime(startMin), duration, price }, cancelUrl,
+          `https://reviveaestheticsadl.com.au/intake.html?booking=${id}&name=${encodeURIComponent(name)}&phone=${encodeURIComponent(phone)}&email=${encodeURIComponent(email)}`)),
     ]));
 
     return json({
@@ -437,6 +448,34 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       ]));
     }
     return json({ ok: true, status: 'cancelled' }, 200, cors);
+  }
+
+  if (path === '/api/intake' && req.method === 'POST') {
+    const body = await req.json().catch(() => ({}));
+    if (body.website) return json({ ok: true }, 200, cors); // honeypot: pretend success
+    const name = String(body.name || '').trim().slice(0, 120);
+    const phone = String(body.phone || '').trim().slice(0, 40);
+    const email = String(body.email || '').trim().toLowerCase().slice(0, 160);
+    if (name.length < 2) return json({ error: 'name_required' }, 400, cors);
+
+    const p = sanitiseIntake(body);
+    if (!p.consent_accurate || !p.consent_course || !p.consent_aftercare || p.signature.length < 2) {
+      return json({ error: 'consent_required' }, 400, cors);
+    }
+    const flags = intakeFlags(p);
+    const summary = intakeSummary(p).slice(0, 240);
+    const id = crypto.randomUUID().slice(0, 10);
+    await db.prepare(
+      `INSERT INTO intake_forms (id, booking_id, name, phone, email, summary, flags, payload, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, String(body.booking_id || '').slice(0, 16) || null, name, phone, email,
+           summary, flags.join(','), JSON.stringify(p), new Date().toISOString()).run();
+
+    ctx.waitUntil(telegram(env,
+      `\u{1F4CB} <b>New pre-treatment form</b>\n${name}${phone ? ' · ' + phone : ''}\n${summary || '—'}` +
+      (flags.length ? `\n⚠️ <b>REVIEW: ${flags.join(', ').toUpperCase()}</b> — confirm suitability before treating` : '')));
+
+    return json({ ok: true, id, flagged: flags.length > 0 }, 200, cors);
   }
 
   return json({ error: 'not_found' }, 404, cors);
@@ -520,9 +559,48 @@ async function handleAdmin(req, env, url, path, cors) {
       }
       map.set(key, c);
     }
+    // attach the latest pre-treatment form per client (match by phone digits, then email)
+    const { results: intakeRows } = await db.prepare(
+      'SELECT phone, email, summary, flags, created_at FROM intake_forms ORDER BY created_at'
+    ).all();
+    const intakeByKey = new Map();
+    for (const r of intakeRows) {
+      const byPhone = String(r.phone || '').replace(/\D/g, '');
+      const byEmail = String(r.email || '').toLowerCase();
+      if (byPhone) intakeByKey.set('p:' + byPhone, r); // asc order => last write wins = latest
+      if (byEmail) intakeByKey.set('e:' + byEmail, r);
+    }
+    for (const c of map.values()) {
+      const it = intakeByKey.get('p:' + String(c.phone || '').replace(/\D/g, ''))
+        || intakeByKey.get('e:' + String(c.email || '').toLowerCase());
+      if (it) c.intake = { summary: it.summary, flags: it.flags ? it.flags.split(',').filter(Boolean) : [], date: (it.created_at || '').slice(0, 10) };
+    }
+
     const clients = [...map.values()].sort((a, b) =>
       (b.next_booking || b.last_visit || '').localeCompare(a.next_booking || a.last_visit || ''));
     return json({ clients, total: clients.length }, 200, cors);
+  }
+
+  if (path === '/api/admin/intake' && req.method === 'GET') {
+    const id = url.searchParams.get('id');
+    const phone = url.searchParams.get('phone');
+    let rows = [];
+    if (id) {
+      const r = await db.prepare('SELECT * FROM intake_forms WHERE id = ?').bind(String(id)).first();
+      rows = r ? [r] : [];
+    } else if (phone) {
+      const digits = String(phone).replace(/\D/g, '');
+      const { results } = await db.prepare(
+        "SELECT * FROM intake_forms WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone,' ',''),'-',''),'+',''),'(','') LIKE ? ORDER BY created_at DESC"
+      ).bind('%' + digits + '%').all();
+      rows = results;
+    } else {
+      const { results } = await db.prepare(
+        'SELECT id, booking_id, name, phone, email, summary, flags, created_at FROM intake_forms ORDER BY created_at DESC LIMIT 200'
+      ).all();
+      rows = results;
+    }
+    return json({ intake: rows.map(r => ({ ...r, payload: r.payload ? JSON.parse(r.payload) : undefined })) }, 200, cors);
   }
 
   if (path === '/api/admin/blocked' && req.method === 'GET') {
@@ -561,4 +639,53 @@ async function makePriceOf(db) {
   const priceMap = Object.fromEntries(addons.map(a => [a.id, a.price_aud]));
   return (r) => r.price_aud + String(r.addon_ids || '').split(',').filter(Boolean)
     .reduce((s, id) => s + (priceMap[id] || 0), 0);
+}
+
+// ---------- intake forms ----------
+
+// Hard contraindications: a "yes" answer to any of these means Stefani must
+// review suitability before treating. [payload key, admin label].
+const INTAKE_FLAGS = [
+  ['pregnant', 'pregnancy'],
+  ['accutane', 'roaccutane'],
+  ['keloid', 'keloid-scarring'],
+  ['infection', 'active-infection'],
+  ['healing', 'healing/immune'],
+  ['coldsores', 'cold-sores'],
+];
+
+function intakeFlags(p) {
+  return INTAKE_FLAGS
+    .filter(([k]) => String(p[k] || '').toLowerCase() === 'yes')
+    .map(([, label]) => label);
+}
+
+function intakeSummary(p) {
+  const bits = [];
+  if (Array.isArray(p.concerns) && p.concerns.length) bits.push('Concerns: ' + p.concerns.join(', '));
+  if (p.skin_type) bits.push('Skin: ' + p.skin_type);
+  if (p.meds) bits.push('Meds: ' + p.meds);
+  if (p.allergies) bits.push('Allergies: ' + p.allergies);
+  return bits.join(' · ');
+}
+
+/** Whitelist + size-cap the raw form body so we never store unbounded junk. */
+function sanitiseIntake(b) {
+  const str = (v, n = 200) => String(v == null ? '' : v).slice(0, n);
+  const arr = (v) => (Array.isArray(v) ? v : []).slice(0, 30).map((x) => str(x, 80));
+  const yn = (v) => { const s = String(v || '').toLowerCase(); return s === 'yes' ? 'yes' : s === 'no' ? 'no' : ''; };
+  return {
+    concerns: arr(b.concerns),
+    skin_type: str(b.skin_type, 40),
+    fitzpatrick: str(b.fitzpatrick, 60),
+    routine: str(b.routine, 600),
+    pregnant: yn(b.pregnant), accutane: yn(b.accutane), retinoids: yn(b.retinoids),
+    keloid: yn(b.keloid), coldsores: yn(b.coldsores), infection: yn(b.infection), healing: yn(b.healing),
+    meds: str(b.meds, 600), allergies: str(b.allergies, 400),
+    recent_tx: arr(b.recent_tx), recent_when: str(b.recent_when, 300),
+    sun: yn(b.sun), prior_reaction: str(b.prior_reaction, 400),
+    smoker: yn(b.smoker), sun_habits: str(b.sun_habits, 300),
+    consent_accurate: !!b.consent_accurate, consent_course: !!b.consent_course, consent_aftercare: !!b.consent_aftercare,
+    photo_consent: yn(b.photo_consent), signature: str(b.signature, 120),
+  };
 }
