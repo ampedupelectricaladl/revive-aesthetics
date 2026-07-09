@@ -106,6 +106,133 @@ async function telegram(env, text) {
   ));
 }
 
+// ---------- email (Gmail API, sender = Revive's Gmail) ----------
+
+function b64url(str) {
+  return btoa(unescape(encodeURIComponent(str))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function sendEmail(env, to, subject, html) {
+  if (!env.GMAIL_REFRESH_TOKEN || !to) return;
+  const tr = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: env.GMAIL_CLIENT_ID, client_secret: env.GMAIL_CLIENT_SECRET,
+      refresh_token: env.GMAIL_REFRESH_TOKEN, grant_type: 'refresh_token',
+    }),
+  });
+  const { access_token } = await tr.json();
+  if (!access_token) return;
+  const raw = [
+    `From: ${env.MAIL_FROM || 'Revive Aesthetics <reviveaestheticsadl@gmail.com>'}`,
+    ...(env.MAIL_REPLY_TO ? [`Reply-To: ${env.MAIL_REPLY_TO}`] : []),
+    `To: ${to}`,
+    `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=UTF-8',
+    '', html,
+  ].join('\r\n');
+  await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: { authorization: 'Bearer ' + access_token, 'content-type': 'application/json' },
+    body: JSON.stringify({ raw: b64url(raw) }),
+  });
+}
+
+function emailShell(heading, inner) {
+  return `<!doctype html><body style="margin:0;padding:0;background:#f7f0df;">
+  <div style="max-width:560px;margin:0 auto;font-family:Georgia,'Times New Roman',serif;">
+    <div style="background:#2B0F1A;text-align:center;padding:34px 20px 26px;">
+      <div style="color:#F2E7CE;font-size:22px;letter-spacing:6px;">REVIVE AESTHETICS</div>
+      <div style="color:#c2a878;font-size:11px;letter-spacing:4px;margin-top:6px;">ADELAIDE SKIN STUDIO</div>
+    </div>
+    <div style="background:#fbf6ea;padding:34px 30px;color:#2b0f1a;">
+      <h1 style="font-size:24px;font-weight:normal;margin:0 0 18px;">${heading}</h1>
+      ${inner}
+    </div>
+    <div style="background:#2B0F1A;color:#F2E7CE;text-align:center;padding:20px;font-size:12px;">
+      Revive Aesthetics · 262 Pulteney St, Adelaide SA · <a href="tel:0404967051" style="color:#c2a878;text-decoration:none;">0404 967 051</a><br>
+      <a href="https://reviveaestheticsadl.com.au" style="color:#c2a878;text-decoration:none;">reviveaestheticsadl.com.au</a>
+    </div>
+  </div></body>`;
+}
+
+function bookingDetailsHtml(b) {
+  return `<table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5dcc3;margin:16px 0;">
+    ${[['Treatment', b.what], ['When', `${b.dateLabel}, ${b.timeLabel}`], ['Duration', `${b.duration} min`],
+       ['Price', b.price > 0 ? '$' + b.price : 'Complimentary'], ['Where', '262 Pulteney St, Adelaide SA 5000']]
+      .map(([k, v]) => `<tr><td style="padding:10px 14px;color:#b58a90;font-size:11px;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid #f2ecd9;">${k}</td>
+        <td style="padding:10px 14px;border-bottom:1px solid #f2ecd9;">${v}</td></tr>`).join('')}
+  </table>`;
+}
+
+function confirmationEmail(b, cancelUrl) {
+  return emailShell(`You're booked in, ${b.name.split(' ')[0]}`,
+    `<p style="line-height:1.7;margin:0;">Thank you for booking with Revive Aesthetics — here are your appointment details:</p>
+    ${bookingDetailsHtml(b)}
+    <p style="line-height:1.7;font-size:14px;color:#6f5b58;">Need to change or cancel? No stress —
+    <a href="${cancelUrl}" style="color:#2B0F1A;">manage your booking here</a> or call Stefani on
+    <a href="tel:0404967051" style="color:#2B0F1A;">0404 967 051</a>.</p>
+    <p style="line-height:1.7;">See you soon,<br><em style="color:#c2a878;font-size:20px;">Stefani</em></p>`);
+}
+
+function reminderEmail(b, cancelUrl) {
+  return emailShell(`See you tomorrow, ${b.name.split(' ')[0]}`,
+    `<p style="line-height:1.7;margin:0;">Just a gentle reminder about your appointment:</p>
+    ${bookingDetailsHtml(b)}
+    <p style="line-height:1.7;font-size:14px;color:#6f5b58;">Arrive with clean skin if you can (no makeup is perfect).
+    Something come up? <a href="${cancelUrl}" style="color:#2B0F1A;">Change your booking</a> or call
+    <a href="tel:0404967051" style="color:#2B0F1A;">0404 967 051</a>.</p>
+    <p style="line-height:1.7;">Looking forward to it,<br><em style="color:#c2a878;font-size:20px;">Stefani</em></p>`);
+}
+
+function cancelledEmail(b) {
+  return emailShell('Your booking is cancelled',
+    `<p style="line-height:1.7;margin:0;">Your ${b.what} on ${b.dateLabel} has been cancelled — all done, nothing owing.</p>
+    <p style="line-height:1.7;">Ready for another time? <a href="https://reviveaestheticsadl.com.au/book.html" style="color:#2B0F1A;">Book online</a> any time.</p>
+    <p style="line-height:1.7;">Hope to see you soon,<br><em style="color:#c2a878;font-size:20px;">Stefani</em></p>`);
+}
+
+function isoToAdelaideAbs(iso) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date(iso));
+  const g = (t) => parts.find(p => p.type === t).value;
+  return absMin(`${g('year')}-${g('month')}-${g('day')}`, parseInt(g('hour'), 10) * 60 + parseInt(g('minute'), 10));
+}
+
+const CANCEL_BASE = 'https://reviveaestheticsadl.com.au/book.html';
+
+async function sendReminders(env) {
+  const db = env.DB;
+  const now = nowInAdelaide();
+  const { results } = await db.prepare(
+    `SELECT b.*, t.name AS tname FROM bookings b JOIN treatments t ON t.id = b.treatment_id
+     WHERE b.status = 'confirmed' AND b.reminded = 0 AND b.email != '' AND b.date BETWEEN ? AND ?`
+  ).bind(now.date, addDays(now.date, 2)).all();
+  for (const r of results) {
+    const startAbs = absMin(r.date, r.start_min);
+    const minsAway = startAbs - now.abs;
+    if (minsAway <= 0 || minsAway > 26 * 60) continue;      // remind within ~26h of the visit
+    if (startAbs - isoToAdelaideAbs(r.created_at) < 20 * 60) { // booked late — confirmation already covers it
+      await db.prepare('UPDATE bookings SET reminded = 1 WHERE id = ?').bind(r.id).run();
+      continue;
+    }
+    const info = {
+      name: r.name, what: r.tname + (r.addon_names ? ' + ' + r.addon_names : ''),
+      dateLabel: fmtDate(r.date), timeLabel: fmtTime(r.start_min),
+      duration: r.end_min - r.start_min, price: 0,
+    };
+    const priceOf = await makePriceOf(db);
+    info.price = priceOf({ price_aud: (await db.prepare('SELECT price_aud FROM treatments WHERE id=?').bind(r.treatment_id).first()).price_aud, addon_ids: r.addon_ids });
+    await sendEmail(env, r.email, `Reminder: ${info.what} ${fmtTime(r.start_min)} tomorrow — Revive Aesthetics`,
+      reminderEmail(info, `${CANCEL_BASE}?cancel=${r.id}&token=${r.cancel_token}`));
+    await db.prepare('UPDATE bookings SET reminded = 1 WHERE id = ?').bind(r.id).run();
+  }
+}
+
 // ---------- http plumbing ----------
 
 function corsHeaders(req, env) {
@@ -142,6 +269,9 @@ export default {
     } catch (e) {
       return json({ error: 'server_error', detail: String(e.message || e) }, 500, cors);
     }
+  },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(sendReminders(env));
   },
 };
 
@@ -229,13 +359,19 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       throw e;
     }
 
-    ctx.waitUntil(telegram(env,
-      `\u{1F33F} <b>New Revive booking</b>\n` +
-      `${t.name}${addonNames ? ' + ' + addonNames : ''} — ${fmtDate(b.date)}, ${fmtTime(startMin)} (${duration} min · $${price})\n` +
-      `${name} · ${phone}${email ? ' · ' + email : ''}` +
-      (notes ? `\nNotes: ${notes}` : '') +
-      `\nRef ${id}`
-    ));
+    const what = t.name + (addonNames ? ' + ' + addonNames : '');
+    const cancelUrl = `${CANCEL_BASE}?cancel=${id}&token=${cancelToken}`;
+    ctx.waitUntil(Promise.allSettled([
+      telegram(env,
+        `\u{1F33F} <b>New Revive booking</b>\n` +
+        `${what} — ${fmtDate(b.date)}, ${fmtTime(startMin)} (${duration} min · $${price})\n` +
+        `${name} · ${phone}${email ? ' · ' + email : ''}` +
+        (notes ? `\nNotes: ${notes}` : '') +
+        `\nRef ${id}`
+      ),
+      sendEmail(env, email, `Booking confirmed: ${what}, ${fmtDate(b.date)} ${fmtTime(startMin)} — Revive Aesthetics`,
+        confirmationEmail({ name, what, dateLabel: fmtDate(b.date), timeLabel: fmtTime(startMin), duration, price }, cancelUrl)),
+    ]));
 
     return json({
       ok: true, id, cancel_token: cancelToken,
@@ -292,9 +428,13 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     if (row.status === 'confirmed') {
       await db.prepare("UPDATE bookings SET status='cancelled', cancelled_at=? WHERE id=?")
         .bind(new Date().toISOString(), row.id).run();
-      ctx.waitUntil(telegram(env,
-        `❌ <b>Revive booking cancelled</b>\n${row.tname}${row.aname ? ' + ' + row.aname : ''} — ${fmtDate(row.date)}, ${fmtTime(row.start_min)}\n${row.name} · ${row.phone}\nRef ${row.id}`
-      ));
+      ctx.waitUntil(Promise.allSettled([
+        telegram(env,
+          `❌ <b>Revive booking cancelled</b>\n${row.tname}${row.aname ? ' + ' + row.aname : ''} — ${fmtDate(row.date)}, ${fmtTime(row.start_min)}\n${row.name} · ${row.phone}\nRef ${row.id}`
+        ),
+        sendEmail(env, row.email, `Booking cancelled — Revive Aesthetics`,
+          cancelledEmail({ what: row.tname + (row.aname ? ' + ' + row.aname : ''), dateLabel: fmtDate(row.date) })),
+      ]));
     }
     return json({ ok: true, status: 'cancelled' }, 200, cors);
   }

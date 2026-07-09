@@ -5,6 +5,12 @@ compatibility_date = "2026-01-01"
 # Secrets (set via `wrangler secret put`, done by deploy.sh):
 #   TELEGRAM_BOT_TOKEN — @Ampelectricalbot token (booking alerts)
 #   ADMIN_TOKEN        — bearer token for /api/admin/* (stored at ~/.openclaw/revive-admin-token.txt)
+#   GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN — Gmail API sender
+#     (token minted for reviveaestheticsadl@gmail.com -> ~/.openclaw/revive-gmail-token.json)
+
+# Hourly: day-before reminder emails
+[triggers]
+crons = ["0 * * * *"]
 
 [[d1_databases]]
 binding = "DB"
@@ -17,3 +23,7 @@ database_id = "b0e07435-7e48-42c7-9387-b1e18a0792c5"
 TELEGRAM_CHAT_IDS = "7981421321"
 # Origins allowed to call the API (site domains). localhost always allowed for testing.
 ALLOWED_ORIGINS = "https://ampedupelectricaladl.github.io,https://reviveaestheticsadl.com.au,https://www.reviveaestheticsadl.com.au"
+# Email sender identity. Interim: Marcus's business Gmail sends, displayed as Revive,
+# replies go to Stefani's Gmail. Swap to her account by re-minting GMAIL_* secrets.
+MAIL_FROM = "Revive Aesthetics <ampedupelectricaladl@gmail.com>"
+MAIL_REPLY_TO = "reviveaestheticsadl@gmail.com"

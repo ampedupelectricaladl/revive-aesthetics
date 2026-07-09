@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   email        TEXT NOT NULL DEFAULT '',
   notes        TEXT NOT NULL DEFAULT '',
   status       TEXT NOT NULL DEFAULT 'confirmed',  -- confirmed | cancelled
+  reminded     INTEGER NOT NULL DEFAULT 0,         -- day-before reminder email sent
   cancel_token TEXT NOT NULL,
   created_at   TEXT NOT NULL,
   cancelled_at TEXT
