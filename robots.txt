@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://ampedupelectricaladl.github.io/revive-aesthetics/sitemap.xml
+Sitemap: https://reviveaesthetics.com.au/sitemap.xml
