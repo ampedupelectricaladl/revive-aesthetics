@@ -9,7 +9,7 @@ compatibility_date = "2026-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "revive-booking"
-database_id = "__DATABASE_ID__"
+database_id = "b0e07435-7e48-42c7-9387-b1e18a0792c5"
 
 [vars]
 # Comma-separated Telegram chat IDs to alert on bookings/cancellations.
