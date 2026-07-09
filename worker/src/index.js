@@ -18,8 +18,8 @@
 
 const TZ = 'Australia/Adelaide';
 const OPEN_DAYS = [1, 2];        // Mon, Tue
-const OPEN_MIN = 14 * 60;        // 2:00pm
-const CLOSE_MIN = 20 * 60 + 30;  // 8:30pm
+const OPEN_MIN = 9 * 60;         // 9:00am
+const CLOSE_MIN = 21 * 60;       // 9:00pm
 const GRID_MIN = 30;             // slot start times every 30 min
 const BUFFER_MIN = 15;           // turnover between clients
 const MIN_NOTICE_MIN = 12 * 60;  // bookings need 12h notice
