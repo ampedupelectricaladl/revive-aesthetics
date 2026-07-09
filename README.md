@@ -5,8 +5,8 @@ Boutique Adelaide skin studio. Static site (GitHub Pages) + custom online bookin
 
 - **Business:** Revive Aesthetics (Adelaide, SA) — Stefani
 - **Services:** Chemical peels · Microneedling · Skin consultations
-- **Hours:** Mon & Tue, 9am–5pm
-- **Phone:** 0404 967 051 · **Email:** smatulin@yahoo.com · **IG:** @reviveaesthetics.adl
+- **Hours:** Mon & Tue, 2pm–8:30pm
+- **Phone:** 0404 967 051 · **Email:** reviveaestheticsadl@gmail.com · **IG:** @reviveaesthetics.adl
 - **Palette:** aubergine `#2B0F1A` + cream `#F2E7CE` + gold `#c2a878` · Cormorant Garamond + Jost
 
 ## Structure
@@ -14,10 +14,11 @@ Boutique Adelaide skin studio. Static site (GitHub Pages) + custom online bookin
 - `book.html` — online booking page (3-step: treatment → time → details; also handles
   cancel links `?cancel=<id>&token=<t>`). Shows a graceful "launching shortly" fallback
   until `window.REVIVE_API_BASE` is set by the deploy script.
-- `worker/` — booking API (Cloudflare Worker + D1)
-  - `src/index.js` — availability engine (Mon/Tue 9–5, 30-min grid, 15-min buffer,
-    12h min notice, 60-day horizon), book/cancel, Telegram alerts, admin endpoints
-  - `schema.sql` — tables + seed treatments (**prices are placeholders — confirm with Stefani**)
+- `worker/` — booking API (Cloudflare Worker + D1), **LIVE** at
+  `https://revive-booking.ampedup.workers.dev`
+  - `src/index.js` — availability engine (Mon/Tue 2pm–8:30pm, 30-min grid, 15-min
+    buffer, 12h min notice, 60-day horizon), book/cancel, Telegram alerts, admin endpoints
+  - `schema.sql` — tables + seed treatments/add-ons
   - `deploy.sh` — one-shot deploy: D1 create → schema → deploy → secrets → wires the
     API URL into `book.html` → pushes the site
 
