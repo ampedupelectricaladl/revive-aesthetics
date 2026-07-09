@@ -20,7 +20,7 @@ database_id = "b0e07435-7e48-42c7-9387-b1e18a0792c5"
 [vars]
 # Comma-separated Telegram chat IDs to alert on bookings/cancellations.
 # Marcus = 7981421321. Add Stefani's chat ID here once she messages the bot.
-TELEGRAM_CHAT_IDS = "7981421321"
+TELEGRAM_CHAT_IDS = "8964116820"
 # Origins allowed to call the API (site domains). localhost always allowed for testing.
 ALLOWED_ORIGINS = "https://ampedupelectricaladl.github.io,https://reviveaestheticsadl.com.au,https://www.reviveaestheticsadl.com.au"
 # Email sender identity. Interim: Marcus's business Gmail sends, displayed as Revive,
