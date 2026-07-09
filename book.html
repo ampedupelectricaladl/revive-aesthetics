@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Book Online | Revive Aesthetics — Adelaide Skin Treatments</title>
+<meta name="description" content="Book your chemical peel, microneedling or skin consultation online — Revive Aesthetics, Adelaide. Mondays & Tuesdays, instant confirmation." />
+<meta name="theme-color" content="#2B0F1A" />
+<meta name="robots" content="index, follow" />
+<link rel="canonical" href="https://ampedupelectricaladl.github.io/revive-aesthetics/book.html" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --plum: #2B0F1A;
+    --plum-soft: #3c1726;
+    --cream: #F2E7CE;
+    --cream-bg: #f7f0df;
+    --cream-card: #fbf6ea;
+    --gold: #c2a878;
+    --rose: #b58a90;
+    --ink: #2b0f1a;
+    --muted: #6f5b58;
+    --maxw: 820px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Jost', system-ui, sans-serif; color: var(--ink);
+    background: var(--cream-bg); line-height: 1.7; font-weight: 300;
+    -webkit-font-smoothing: antialiased; min-height: 100vh;
+    display: flex; flex-direction: column;
+  }
+  h1, h2, h3 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; line-height: 1.1; }
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; width: 100%; }
+  .eyebrow { font-size: 0.72rem; letter-spacing: 0.32em; text-transform: uppercase; font-weight: 400; color: var(--rose); margin-bottom: 14px; }
+
+  .btn {
+    display: inline-block; font-family: 'Jost', sans-serif; font-weight: 400;
+    letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.74rem;
+    padding: 15px 32px; border: 1px solid var(--plum); cursor: pointer;
+    transition: all .25s ease; background: var(--plum); color: var(--cream);
+  }
+  .btn:hover { background: transparent; color: var(--plum); }
+  .btn[disabled] { opacity: .45; pointer-events: none; }
+  .btn--ghost { background: transparent; color: var(--cream); border-color: var(--cream); }
+  .btn--ghost:hover { background: var(--cream); color: var(--plum); }
+  .btn-link { background: none; border: none; cursor: pointer; font-family: 'Jost', sans-serif; font-size: 0.74rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); padding: 10px 0; }
+  .btn-link:hover { color: var(--plum); }
+
+  header.nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(43,15,26,0.96); backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(242,231,206,0.14);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 76px; }
+  .brand { display: flex; align-items: center; gap: 14px; color: var(--cream); }
+  .brand-logo { height: 38px; width: auto; }
+  .brand .monogram { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 1.7rem; }
+  .nav-back { color: var(--cream); font-size: 0.74rem; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.82; }
+  .nav-back:hover { opacity: 1; }
+
+  .page-head { background: var(--plum); color: var(--cream); text-align: center; padding: 64px 0 58px; }
+  .page-head h1 { font-size: clamp(2.2rem, 6vw, 3.4rem); }
+  .page-head h1 em { font-style: italic; color: var(--gold); }
+  .page-head p { color: rgba(242,231,206,0.78); margin-top: 14px; font-size: 0.98rem; }
+
+  main { flex: 1; padding: 56px 0 90px; }
+
+  /* stepper */
+  .steps { display: flex; justify-content: center; gap: 0; margin-bottom: 44px; }
+  .step-dot { display: flex; align-items: center; gap: 10px; font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+  .step-dot .n {
+    width: 30px; height: 30px; border: 1px solid rgba(43,15,26,0.25); border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: 'Cormorant Garamond', serif; font-size: 1rem; transition: all .25s;
+  }
+  .step-dot.active { color: var(--plum); }
+  .step-dot.active .n { background: var(--plum); color: var(--cream); border-color: var(--plum); }
+  .step-dot.done .n { background: var(--gold); color: var(--plum); border-color: var(--gold); }
+  .step-sep { width: 46px; height: 1px; background: rgba(43,15,26,0.2); margin: 15px 14px 0; }
+
+  .panel { display: none; }
+  .panel.on { display: block; animation: fade .35s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+  .panel h2 { font-size: 1.9rem; text-align: center; margin-bottom: 8px; }
+  .panel .sub { text-align: center; color: var(--muted); font-size: 0.95rem; margin-bottom: 34px; }
+
+  /* treatments */
+  .t-grid { display: grid; gap: 18px; }
+  .t-card {
+    background: var(--cream-card); border: 1px solid rgba(43,15,26,0.1); padding: 26px 28px;
+    cursor: pointer; display: flex; justify-content: space-between; align-items: baseline; gap: 18px;
+    transition: all .22s ease;
+  }
+  .t-card:hover { border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 12px 30px rgba(43,15,26,0.08); }
+  .t-card h3 { font-size: 1.45rem; margin-bottom: 6px; }
+  .t-card p { color: var(--muted); font-size: 0.9rem; max-width: 460px; }
+  .t-meta { text-align: right; white-space: nowrap; }
+  .t-meta .price { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; color: var(--plum); }
+  .t-meta .dur { display: block; font-size: 0.7rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--rose); margin-top: 4px; }
+
+  /* dates & times */
+  .chips { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+  .chip {
+    border: 1px solid rgba(43,15,26,0.18); background: var(--cream-card);
+    padding: 12px 18px; cursor: pointer; font-family: 'Jost', sans-serif;
+    font-size: 0.85rem; letter-spacing: 0.04em; transition: all .2s; color: var(--ink);
+  }
+  .chip:hover { border-color: var(--gold); }
+  .chip.sel { background: var(--plum); color: var(--cream); border-color: var(--plum); }
+  .chip .dow { display: block; font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--rose); }
+  .chip.sel .dow { color: var(--gold); }
+  .times { margin-top: 30px; }
+  .times h3 { text-align: center; font-size: 1.25rem; margin-bottom: 16px; }
+  .month-lbl { width: 100%; text-align: center; font-size: 0.7rem; letter-spacing: 0.26em; text-transform: uppercase; color: var(--muted); margin: 18px 0 4px; }
+
+  /* details form */
+  .summary {
+    background: var(--plum); color: var(--cream); padding: 20px 26px; margin-bottom: 28px;
+    display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  .summary .what { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; }
+  .summary .when { font-size: 0.85rem; color: var(--gold); letter-spacing: 0.06em; }
+  form { display: grid; gap: 16px; }
+  .field { display: grid; gap: 6px; }
+  label { font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+  input, textarea {
+    font-family: 'Jost', sans-serif; font-size: 0.98rem; padding: 13px 14px;
+    border: 1px solid rgba(43,15,26,0.18); background: #fff; color: var(--ink); border-radius: 0; width: 100%;
+  }
+  input:focus, textarea:focus { outline: none; border-color: var(--plum); }
+  textarea { resize: vertical; min-height: 90px; }
+  .hp { position: absolute; left: -9999px; opacity: 0; height: 0; overflow: hidden; }
+
+  .msg { text-align: center; padding: 12px; font-size: 0.9rem; }
+  .msg.err { color: #8c2f39; }
+  .loading { text-align: center; color: var(--muted); padding: 40px 0; font-size: 0.9rem; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  /* success / cancel */
+  .done-card { background: var(--cream-card); border: 1px solid var(--gold); text-align: center; padding: 56px 34px; }
+  .done-card .tick { width: 54px; height: 54px; margin: 0 auto 20px; color: var(--gold); }
+  .done-card h2 { font-size: 2rem; margin-bottom: 10px; }
+  .done-card .detail { font-size: 1.05rem; margin: 18px 0 6px; }
+  .done-card .detail strong { font-weight: 400; font-family: 'Cormorant Garamond', serif; font-size: 1.35rem; display: block; }
+  .done-card .note { color: var(--muted); font-size: 0.88rem; max-width: 420px; margin: 16px auto 26px; }
+  .done-actions { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+  .nav-row { display: flex; justify-content: space-between; margin-top: 30px; }
+
+  footer.site {
+    background: var(--plum); color: var(--cream); text-align: center; padding: 44px 0 36px;
+    border-top: 1px solid rgba(242,231,206,0.12);
+  }
+  footer.site .copy { font-size: 0.72rem; color: rgba(242,231,206,0.5); letter-spacing: 0.04em; }
+  @media (max-width: 640px) {
+    .t-card { flex-direction: column; }
+    .t-meta { text-align: left; }
+    .step-sep { width: 20px; }
+    .steps { gap: 0; }
+    .step-dot span.lbl { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="index.html">
+      <img src="assets/logo-mark-cream.png" alt="Revive Aesthetics" class="brand-logo"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';" />
+      <span style="display:none;align-items:center;gap:14px;"><span class="monogram">RA</span></span>
+    </a>
+    <a class="nav-back" href="index.html">&larr; Back to site</a>
+  </div>
+</header>
+
+<section class="page-head">
+  <div class="wrap">
+    <p class="eyebrow" style="color:var(--rose);">Online Booking</p>
+    <h1>Book your <em>appointment</em></h1>
+    <p>Mondays &amp; Tuesdays · instant confirmation</p>
+  </div>
+</section>
+
+<main>
+  <div class="wrap">
+
+    <div class="steps" id="stepper">
+      <div class="step-dot active" data-s="1"><span class="n">1</span><span class="lbl">Treatment</span></div>
+      <div class="step-sep"></div>
+      <div class="step-dot" data-s="2"><span class="n">2</span><span class="lbl">Time</span></div>
+      <div class="step-sep"></div>
+      <div class="step-dot" data-s="3"><span class="n">3</span><span class="lbl">Details</span></div>
+    </div>
+
+    <!-- fallback when API not yet live / unreachable -->
+    <div class="panel" id="p-offline">
+      <div class="done-card">
+        <h2>Online booking is launching shortly</h2>
+        <p class="note">In the meantime, call or send an enquiry and Stefani will find a time that suits you.</p>
+        <div class="done-actions">
+          <a class="btn" href="tel:0404967051">Call 0404 967 051</a>
+          <a class="btn" style="background:transparent;color:var(--plum);" href="index.html#contact">Send an Enquiry</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- step 1: treatment -->
+    <div class="panel" id="p-treatment">
+      <h2>Choose your treatment</h2>
+      <p class="sub">Every treatment includes a skin chat so your session fits your goals.</p>
+      <div class="loading" id="t-loading">Loading treatments…</div>
+      <div class="t-grid" id="t-grid"></div>
+    </div>
+
+    <!-- step 2: date & time -->
+    <div class="panel" id="p-time">
+      <h2>Pick a time</h2>
+      <p class="sub" id="time-sub"></p>
+      <div class="loading" id="a-loading">Checking availability…</div>
+      <div class="chips" id="date-chips"></div>
+      <div class="times" id="time-wrap" style="display:none;">
+        <h3 id="time-title"></h3>
+        <div class="chips" id="time-chips"></div>
+      </div>
+      <div class="msg err" id="time-msg"></div>
+      <div class="nav-row"><button class="btn-link" data-back="1">&larr; Change treatment</button><span></span></div>
+    </div>
+
+    <!-- step 3: details -->
+    <div class="panel" id="p-details">
+      <h2>Your details</h2>
+      <p class="sub">Almost done — we just need to know who's coming in.</p>
+      <div class="summary">
+        <span class="what" id="sum-what"></span>
+        <span class="when" id="sum-when"></span>
+      </div>
+      <form id="book-form">
+        <div class="field"><label for="f-name">Name</label><input id="f-name" required autocomplete="name" /></div>
+        <div class="field"><label for="f-phone">Phone</label><input id="f-phone" type="tel" required autocomplete="tel" /></div>
+        <div class="field"><label for="f-email">Email</label><input id="f-email" type="email" autocomplete="email" /></div>
+        <div class="field"><label for="f-notes">Anything Stefani should know? <span style="text-transform:none;letter-spacing:0;">(optional)</span></label>
+          <textarea id="f-notes" placeholder="Skin concerns, first visit, current products…"></textarea></div>
+        <div class="hp"><label>Website</label><input id="f-website" tabindex="-1" autocomplete="off" /></div>
+        <div class="msg err" id="book-msg"></div>
+        <button type="submit" class="btn" id="book-btn">Confirm Booking</button>
+      </form>
+      <div class="nav-row"><button class="btn-link" data-back="2">&larr; Change time</button><span></span></div>
+    </div>
+
+    <!-- success -->
+    <div class="panel" id="p-done">
+      <div class="done-card">
+        <svg class="tick" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="24" cy="24" r="21"/><path d="M15 24.5l6.5 6.5L33 18"/>
+        </svg>
+        <h2>You're booked in</h2>
+        <p class="detail"><strong id="done-what"></strong><span id="done-when"></span></p>
+        <p class="note">A reminder will come closer to the day. Need to change or cancel? Use the link below — or just call Stefani on <a href="tel:0404967051" style="text-decoration:underline;">0404 967 051</a>.</p>
+        <div class="done-actions">
+          <a class="btn" id="gcal-link" target="_blank" rel="noopener">Add to Google Calendar</a>
+          <a class="btn" style="background:transparent;color:var(--plum);" id="cancel-link">Cancel / Change</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- cancel flow -->
+    <div class="panel" id="p-cancel">
+      <div class="done-card">
+        <h2 id="c-title">Cancel this booking?</h2>
+        <p class="detail" id="c-detail"></p>
+        <p class="note" id="c-note">If something's come up, no stress — cancel below or call Stefani to find another time.</p>
+        <div class="done-actions" id="c-actions">
+          <button class="btn" id="c-confirm">Yes, Cancel Booking</button>
+          <a class="btn" style="background:transparent;color:var(--plum);" href="book.html">Keep it — book another</a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="copy">© <span id="yr"></span> Revive Aesthetics · Adelaide, South Australia · 0404 967 051</div>
+  </div>
+</footer>
+
+<script>
+  // Set by worker/deploy.sh once the booking API is live. Empty = show fallback panel.
+  window.REVIVE_API_BASE = "";
+</script>
+<script>
+(function () {
+  var API = window.REVIVE_API_BASE;
+  var state = { treatment: null, availability: null, date: null, min: null, timeLabel: '' };
+  document.getElementById('yr').textContent = new Date().getFullYear();
+
+  function $(id) { return document.getElementById(id); }
+  function show(panelId, step) {
+    ['p-offline','p-treatment','p-time','p-details','p-done','p-cancel'].forEach(function (p) {
+      $(p).classList.toggle('on', p === panelId);
+    });
+    document.querySelectorAll('.step-dot').forEach(function (d) {
+      var s = +d.dataset.s;
+      d.classList.toggle('active', s === step);
+      d.classList.toggle('done', step ? s < step : false);
+    });
+    $('stepper').style.display = step ? 'flex' : 'none';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function api(path, opts) {
+    return fetch(API + path, opts).then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, status: r.status, data: j }; });
+    });
+  }
+  function fmtDateLabel(d) {
+    var p = d.split('-'); var dt = new Date(Date.UTC(+p[0], +p[1]-1, +p[2]));
+    return { dow: dt.toLocaleDateString('en-AU', { weekday: 'long', timeZone: 'UTC' }),
+             day: dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', timeZone: 'UTC' }),
+             month: dt.toLocaleDateString('en-AU', { month: 'long', year: 'numeric', timeZone: 'UTC' }) };
+  }
+  document.querySelectorAll('[data-back]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      show(b.dataset.back === '1' ? 'p-treatment' : 'p-time', +b.dataset.back);
+    });
+  });
+
+  // ---- cancel flow via ?cancel=<id>&token=<t> ----
+  var qs = new URLSearchParams(location.search);
+  if (qs.get('cancel') && qs.get('token')) {
+    if (!API) { show('p-offline', null); return; }
+    show('p-cancel', null);
+    api('/api/booking?id=' + encodeURIComponent(qs.get('cancel')) + '&token=' + encodeURIComponent(qs.get('token')))
+      .then(function (r) {
+        if (!r.ok) { $('c-title').textContent = 'Booking not found'; $('c-actions').style.display = 'none'; $('c-note').textContent = 'This link looks invalid — call Stefani on 0404 967 051.'; return; }
+        var b = r.data;
+        $('c-detail').innerHTML = '<strong>' + b.treatment + '</strong>' + b.date_label + ', ' + b.time_label;
+        if (b.status !== 'confirmed') { $('c-title').textContent = 'Already cancelled'; $('c-confirm').style.display = 'none'; }
+        $('c-confirm').addEventListener('click', function () {
+          $('c-confirm').disabled = true;
+          api('/api/cancel', { method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ id: qs.get('cancel'), token: qs.get('token') }) })
+            .then(function () {
+              $('c-title').textContent = 'Booking cancelled';
+              $('c-note').textContent = 'All done — hope to see you again soon.';
+              $('c-confirm').style.display = 'none';
+            });
+        });
+      })
+      .catch(function () { show('p-offline', null); });
+    return;
+  }
+
+  // ---- booking flow ----
+  if (!API) { show('p-offline', null); return; }
+  show('p-treatment', 1);
+
+  api('/api/treatments').then(function (r) {
+    $('t-loading').style.display = 'none';
+    var grid = $('t-grid');
+    r.data.treatments.forEach(function (t) {
+      var card = document.createElement('div');
+      card.className = 't-card';
+      card.innerHTML = '<div><h3>' + t.name + '</h3><p>' + t.description + '</p></div>' +
+        '<div class="t-meta"><span class="price">' + (t.price_aud > 0 ? '$' + t.price_aud : 'Free') + '</span>' +
+        '<span class="dur">' + t.duration_min + ' min</span></div>';
+      card.addEventListener('click', function () { pickTreatment(t); });
+      grid.appendChild(card);
+    });
+  }).catch(function () { show('p-offline', null); });
+
+  function pickTreatment(t) {
+    state.treatment = t; state.date = null; state.min = null;
+    $('time-sub').textContent = t.name + ' · ' + t.duration_min + ' min' + (t.price_aud > 0 ? ' · $' + t.price_aud : '');
+    $('date-chips').innerHTML = ''; $('time-wrap').style.display = 'none'; $('time-msg').textContent = '';
+    $('a-loading').style.display = 'block';
+    show('p-time', 2);
+    api('/api/availability?treatment=' + encodeURIComponent(t.id)).then(function (r) {
+      $('a-loading').style.display = 'none';
+      state.availability = r.data.dates || {};
+      var dates = Object.keys(state.availability);
+      if (!dates.length) {
+        $('time-msg').textContent = 'No times available in the next two months — please call 0404 967 051.';
+        return;
+      }
+      var chips = $('date-chips'); var lastMonth = '';
+      dates.forEach(function (d) {
+        var f = fmtDateLabel(d);
+        if (f.month !== lastMonth) {
+          lastMonth = f.month;
+          var lbl = document.createElement('div'); lbl.className = 'month-lbl'; lbl.textContent = f.month;
+          chips.appendChild(lbl);
+        }
+        var c = document.createElement('button');
+        c.className = 'chip'; c.type = 'button';
+        c.innerHTML = '<span class="dow">' + f.dow + '</span>' + f.day;
+        c.addEventListener('click', function () { pickDate(d, c); });
+        chips.appendChild(c);
+      });
+    });
+  }
+
+  function pickDate(d, chipEl) {
+    state.date = d; state.min = null;
+    document.querySelectorAll('#date-chips .chip').forEach(function (c) { c.classList.remove('sel'); });
+    chipEl.classList.add('sel');
+    var f = fmtDateLabel(d);
+    $('time-title').textContent = f.dow + ' ' + f.day;
+    var tc = $('time-chips'); tc.innerHTML = '';
+    state.availability[d].forEach(function (s) {
+      var c = document.createElement('button');
+      c.className = 'chip'; c.type = 'button'; c.textContent = s.label;
+      c.addEventListener('click', function () {
+        state.min = s.min; state.timeLabel = s.label;
+        $('sum-what').textContent = state.treatment.name;
+        $('sum-when').textContent = f.dow + ' ' + f.day + ' · ' + s.label;
+        $('book-msg').textContent = '';
+        show('p-details', 3);
+      });
+      tc.appendChild(c);
+    });
+    $('time-wrap').style.display = 'block';
+  }
+
+  $('book-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var btn = $('book-btn'); btn.disabled = true; btn.textContent = 'Booking…';
+    $('book-msg').textContent = '';
+    api('/api/book', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        treatment: state.treatment.id, date: state.date, start_min: state.min,
+        name: $('f-name').value, phone: $('f-phone').value,
+        email: $('f-email').value, notes: $('f-notes').value,
+        website: $('f-website').value,
+      }),
+    }).then(function (r) {
+      btn.disabled = false; btn.textContent = 'Confirm Booking';
+      if (!r.ok) {
+        var errs = {
+          slot_unavailable: 'That time was just taken — please pick another.',
+          too_many_bookings: 'You already have upcoming bookings — call 0404 967 051 to add more.',
+          phone_required: 'Please enter a valid phone number.',
+          name_required: 'Please enter your name.',
+          bad_email: 'That email doesn’t look right.',
+        };
+        $('book-msg').textContent = errs[r.data.error] || 'Something went wrong — please try again or call 0404 967 051.';
+        if (r.data.error === 'slot_unavailable') pickTreatment(state.treatment);
+        return;
+      }
+      var b = r.data;
+      $('done-what').textContent = b.treatment;
+      $('done-when').textContent = b.date_label + ' · ' + b.time_label;
+      var start = b.date.replace(/-/g, '') + 'T' + String(Math.floor(state.min / 60)).padStart(2, '0') + String(state.min % 60).padStart(2, '0') + '00';
+      var endMin = state.min + b.duration_min;
+      var end = b.date.replace(/-/g, '') + 'T' + String(Math.floor(endMin / 60)).padStart(2, '0') + String(endMin % 60).padStart(2, '0') + '00';
+      var cancelUrl = location.origin + location.pathname + '?cancel=' + b.id + '&token=' + b.cancel_token;
+      $('gcal-link').href = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+        '&text=' + encodeURIComponent(b.treatment + ' — Revive Aesthetics') +
+        '&dates=' + start + '/' + end + '&ctz=Australia/Adelaide' +
+        '&details=' + encodeURIComponent('Revive Aesthetics, Adelaide\nCancel/change: ' + cancelUrl) +
+        '&location=' + encodeURIComponent('Adelaide SA');
+      $('cancel-link').href = cancelUrl;
+      show('p-done', null);
+    }).catch(function () {
+      btn.disabled = false; btn.textContent = 'Confirm Booking';
+      $('book-msg').textContent = 'Connection problem — please try again.';
+    });
+  });
+})();
+</script>
+</body>
+</html>
