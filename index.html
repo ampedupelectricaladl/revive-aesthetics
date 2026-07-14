@@ -184,6 +184,15 @@
     letter-spacing: 0.18em; text-transform: uppercase; color: var(--rose);
   }
 
+  /* ---------- Results ---------- */
+  .results { background: var(--cream-card); }
+  .results-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 26px; max-width: 880px; margin: 0 auto;
+  }
+  .results-grid figure { margin: 0; border: 1px solid rgba(43,15,26,0.08); box-shadow: 0 14px 34px rgba(43,15,26,0.08); }
+  .results-grid img { width: 100%; height: auto; display: block; }
+
   /* ---------- About ---------- */
   .about { background: var(--plum); color: var(--cream); }
   .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 70px; align-items: center; }
@@ -346,6 +355,26 @@
         <p>The perfect finish to any treatment — soothing LED light to calm the skin, support healing and boost your glow. Add it to your peel or microneedling session when you book. A complimentary skin consultation can be added to any booking too.</p>
         <span class="tag">Add-On · Calm · Glow</span>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== RESULTS ===================== -->
+<section class="results" id="results">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="divider"></div>
+      <p class="eyebrow">Real Results</p>
+      <h2>Microneedling, before &amp; after</h2>
+      <p>Real clients treated in the studio — collagen-induction microneedling to repair, smooth and restore the skin.</p>
+    </div>
+    <div class="results-grid">
+      <figure class="reveal">
+        <img src="assets/microneedling-result-1.jpg" alt="Microneedling before and after result — Revive Aesthetics Adelaide" loading="lazy" />
+      </figure>
+      <figure class="reveal">
+        <img src="assets/microneedling-result-2.jpg" alt="Microneedling before and after result — Revive Aesthetics Adelaide" loading="lazy" />
+      </figure>
     </div>
   </div>
 </section>
