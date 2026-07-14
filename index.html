@@ -37,11 +37,22 @@
   "priceRange": "$$",
   "address": {
     "@type": "PostalAddress",
+    "streetAddress": "262 Pulteney St",
     "addressLocality": "Adelaide",
     "addressRegion": "SA",
+    "postalCode": "5000",
     "addressCountry": "AU"
   },
-  "areaServed": { "@type": "City", "name": "Adelaide" },
+  "areaServed": [
+    { "@type": "City", "name": "Adelaide" },
+    { "@type": "Place", "name": "Adelaide CBD" },
+    { "@type": "Place", "name": "North Adelaide" },
+    { "@type": "Place", "name": "Norwood" },
+    { "@type": "Place", "name": "Kent Town" },
+    { "@type": "Place", "name": "Unley" },
+    { "@type": "Place", "name": "Prospect" },
+    { "@type": "Place", "name": "Walkerville" }
+  ],
   "openingHoursSpecification": [
     {
       "@type": "OpeningHoursSpecification",
@@ -54,6 +65,46 @@
     { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Chemical Peels" } },
     { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "PDRN Microneedling Booster" } },
     { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "LED Light Therapy" } }
+  ]
+}
+</script>
+
+<!-- ===== FAQ structured data (eligible for rich results in Google) ===== -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What treatments does Revive Aesthetics offer in Adelaide?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Revive Aesthetics is a boutique skin clinic in Adelaide offering chemical peels, PDRN microneedling (collagen-induction skin needling) and LED light therapy. Every treatment begins with a personalised skin consultation so your plan is built around your skin." }
+    },
+    {
+      "@type": "Question",
+      "name": "What is PDRN microneedling?",
+      "acceptedAnswer": { "@type": "Answer", "text": "PDRN microneedling combines collagen-induction microneedling with a PDRN (polynucleotide) booster that supports your skin's natural repair. It helps soften scarring, smooth texture and improve firmness for a fresher, plumper complexion." }
+    },
+    {
+      "@type": "Question",
+      "name": "What can chemical peels help with?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Professional chemical peels resurface and brighten the skin, targeting dullness, congestion, uneven tone, pigmentation and the early signs of ageing. Peel strength is tailored to your skin type and goals at your consultation." }
+    },
+    {
+      "@type": "Question",
+      "name": "Where is Revive Aesthetics located and when are you open?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Revive Aesthetics is in Adelaide's city centre, open Monday and Tuesday, 9am to 9pm, by appointment. You can book online anytime at reviveaestheticsadl.com.au or call 0404 967 051." }
+    },
+    {
+      "@type": "Question",
+      "name": "Do I need a consultation before my first treatment?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Every new client starts with a skin consultation so we can assess your skin, understand your goals and recommend the safest, most effective treatment plan for you." }
+    },
+    {
+      "@type": "Question",
+      "name": "How often should I have a skin treatment?",
+      "acceptedAnswer": { "@type": "Answer", "text": "It depends on your skin and goals, but most clients see the best results from a short course of treatments spaced a few weeks apart. Your therapist maps out a plan tailored to you at your consultation." }
+    }
   ]
 }
 </script>
@@ -248,6 +299,25 @@
   form .btn { border: none; }
   .field-note { font-size: 0.74rem; color: var(--muted); letter-spacing: 0.02em; text-transform: none; margin-top: 2px; }
 
+  /* ---------- FAQ ---------- */
+  .faq { background: var(--cream-bg); }
+  .faq-list { max-width: 760px; margin: 0 auto; }
+  .faq-item { border-bottom: 1px solid rgba(43,15,26,0.12); }
+  .faq-item summary {
+    list-style: none; cursor: pointer; padding: 26px 44px 26px 0; position: relative;
+    font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; color: var(--ink);
+    line-height: 1.25;
+  }
+  .faq-item summary::-webkit-details-marker { display: none; }
+  .faq-item summary::after {
+    content: "+"; position: absolute; right: 4px; top: 24px;
+    font-family: 'Jost', sans-serif; font-size: 1.5rem; color: var(--gold);
+    line-height: 1; transition: transform .25s ease;
+  }
+  .faq-item[open] summary::after { content: "\2212"; }
+  .faq-a { padding: 0 40px 26px 0; }
+  .faq-a p { color: var(--muted); font-size: 0.98rem; }
+
   /* signature in About */
   .signature {
     font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 2rem;
@@ -303,6 +373,7 @@
       <a href="#services">Treatments</a>
       <a href="#about">About</a>
       <a href="#why">Why Revive</a>
+      <a href="#faq">FAQ</a>
       <a href="#contact">Contact</a>
       <a href="book.html" class="btn btn--ghost" style="padding:11px 22px;">Book Now</a>
     </nav>
@@ -450,6 +521,44 @@
   </div>
 </section>
 
+<!-- ===================== FAQ ===================== -->
+<section class="faq" id="faq">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="divider"></div>
+      <p class="eyebrow">Questions</p>
+      <h2>Frequently asked</h2>
+      <p>Everything you might want to know before your first visit to the studio.</p>
+    </div>
+    <div class="faq-list">
+      <details class="faq-item">
+        <summary>What treatments does Revive Aesthetics offer in Adelaide?</summary>
+        <div class="faq-a"><p>Revive Aesthetics is a boutique skin clinic in Adelaide offering chemical peels, PDRN microneedling (collagen-induction skin needling) and LED light therapy. Every treatment begins with a personalised skin consultation, so your plan is built around your skin.</p></div>
+      </details>
+      <details class="faq-item">
+        <summary>What is PDRN microneedling?</summary>
+        <div class="faq-a"><p>PDRN microneedling combines collagen-induction microneedling with a PDRN (polynucleotide) booster that supports your skin's natural repair. It helps soften scarring, smooth texture and improve firmness for a fresher, plumper complexion.</p></div>
+      </details>
+      <details class="faq-item">
+        <summary>What can chemical peels help with?</summary>
+        <div class="faq-a"><p>Professional chemical peels resurface and brighten the skin — targeting dullness, congestion, uneven tone, pigmentation and the early signs of ageing. Peel strength is always tailored to your skin type and goals at your consultation.</p></div>
+      </details>
+      <details class="faq-item">
+        <summary>Where are you located, and when are you open?</summary>
+        <div class="faq-a"><p>Revive Aesthetics is in Adelaide's city centre, open Monday and Tuesday, 9am – 9pm, by appointment. You can book online anytime, or call 0404 967 051.</p></div>
+      </details>
+      <details class="faq-item">
+        <summary>Do I need a consultation before my first treatment?</summary>
+        <div class="faq-a"><p>Yes — every new client starts with a skin consultation. It lets us assess your skin, understand your goals and recommend the safest, most effective treatment plan for you.</p></div>
+      </details>
+      <details class="faq-item">
+        <summary>How often should I have a treatment?</summary>
+        <div class="faq-a"><p>It depends on your skin and your goals, but most clients see the best results from a short course of treatments spaced a few weeks apart. Your therapist will map out a plan tailored to you at your consultation.</p></div>
+      </details>
+    </div>
+  </div>
+</section>
+
 <!-- ===================== CONTACT ===================== -->
 <section class="contact" id="contact">
   <div class="wrap contact-grid">
@@ -531,6 +640,7 @@
       <a href="#services">Treatments</a>
       <a href="#about">About</a>
       <a href="#why">Why Revive</a>
+      <a href="#faq">FAQ</a>
       <a href="#contact">Contact</a>
     </div>
     <div class="copy">© <span id="yr"></span> Revive Aesthetics · Adelaide, South Australia · 0404 967 051</div>
