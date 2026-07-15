@@ -259,6 +259,17 @@
   }
   .about-photo img { width: 100%; height: 100%; object-fit: cover; }
 
+  /* ---------- Studio ---------- */
+  .studio-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 26px; max-width: 1020px; margin: 0 auto;
+  }
+  .studio-grid figure {
+    margin: 0; aspect-ratio: 3/4; overflow: hidden;
+    border: 1px solid rgba(43,15,26,0.08); box-shadow: 0 14px 34px rgba(43,15,26,0.08);
+  }
+  .studio-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
   /* ---------- Why ---------- */
   .why { background: var(--cream-card); }
   .why-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); gap: 40px; }
@@ -464,6 +475,29 @@
     </div>
     <div class="about-photo reveal">
       <img src="assets/stefani.jpg" alt="Stefani — Revive Aesthetics, Adelaide" />
+    </div>
+  </div>
+</section>
+
+<!-- ===================== STUDIO ===================== -->
+<section class="studio" id="studio">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="divider"></div>
+      <p class="eyebrow">The Studio</p>
+      <h2>A calm, private space</h2>
+      <p>Step into a quiet corner of Adelaide made for your skin — soft light, warm textures and complete privacy, from consultation to treatment.</p>
+    </div>
+    <div class="studio-grid">
+      <figure class="reveal">
+        <img src="assets/studio-room.jpg" alt="Treatment room at Revive Aesthetics — Adelaide skin studio" loading="lazy" />
+      </figure>
+      <figure class="reveal">
+        <img src="assets/studio-shelf.jpg" alt="Styling details inside the Revive Aesthetics studio, Adelaide" loading="lazy" />
+      </figure>
+      <figure class="reveal">
+        <img src="assets/studio-lounge.jpg" alt="Private waiting lounge at Revive Aesthetics, Adelaide" loading="lazy" />
+      </figure>
     </div>
   </div>
 </section>
