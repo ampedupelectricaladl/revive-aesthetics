@@ -393,6 +393,24 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     }, 200, cors);
   }
 
+  // One-tap Apple Calendar subscribe: https link (tappable in Telegram/SMS) that
+  // redirects to the webcal:// form of the feed, which iOS hands to Calendar.
+  if (path === '/api/apple-calendar' && req.method === 'GET') {
+    const key = url.searchParams.get('key') || '';
+    if (!env.ADMIN_TOKEN || key !== env.ADMIN_TOKEN) return new Response('forbidden', { status: 403 });
+    const webcal = `webcal://${url.host}/api/feed.ics?key=${key}`;
+    return new Response(
+      `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
+      `<meta http-equiv="refresh" content="0;url=${webcal}">` +
+      `<title>Revive Bookings — Apple Calendar</title>` +
+      `<body style="font-family:sans-serif;background:#2B0F1A;color:#F2E7CE;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90vh;text-align:center;padding:24px">` +
+      `<p>Opening Apple Calendar…</p>` +
+      `<p><a href="${webcal}" style="display:inline-block;background:#c2a878;color:#2B0F1A;padding:14px 28px;border-radius:999px;text-decoration:none;font-weight:600">Subscribe to Revive Bookings</a></p>` +
+      `<p style="opacity:.7;font-size:14px">Tap the button if nothing happens, then tap Subscribe.</p></body>`,
+      { headers: { 'content-type': 'text/html; charset=utf-8' } }
+    );
+  }
+
   // Live calendar feed — subscribe in Google/Apple Calendar (key = admin token)
   if (path === '/api/feed.ics' && req.method === 'GET') {
     const key = url.searchParams.get('key') || '';
