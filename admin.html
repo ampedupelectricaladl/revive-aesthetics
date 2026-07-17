@@ -64,6 +64,13 @@
   .btn { font-family:'Jost',sans-serif; letter-spacing:.14em; text-transform:uppercase; font-size:.72rem; padding:12px 22px; border:1px solid var(--plum); background:var(--plum); color:var(--cream); cursor:pointer; }
   .btn--ghost { background:transparent; color:var(--plum); }
 
+  .bar-row { margin-bottom:10px; }
+  .bar-lbl { display:flex; justify-content:space-between; font-size:.86rem; margin-bottom:4px; }
+  .bar-lbl .n { color:var(--muted); }
+  .bar-track { height:8px; background:rgba(43,15,26,.08); }
+  .bar-fill { height:8px; background:var(--gold); min-width:2px; }
+  .q-head { font-size:.7rem; letter-spacing:.24em; text-transform:uppercase; color:var(--rose); margin:26px 0 12px; }
+
   .lock { max-width:400px; margin:14vh auto; text-align:center; padding:0 20px; }
   .lock h2 { font-size:1.8rem; margin-bottom:8px; }
   .lock p { color:var(--muted); font-size:.9rem; margin-bottom:20px; }
@@ -93,6 +100,7 @@
         <button class="tab on" data-t="diary">Diary</button>
         <button class="tab" data-t="clients">Clients</button>
         <button class="tab" data-t="timeoff">Time Off</button>
+        <button class="tab" data-t="survey">Survey</button>
       </div>
     </div>
   </header>
@@ -100,6 +108,7 @@
     <div id="v-diary"><div class="loading">Loading your diary…</div></div>
     <div id="v-clients" style="display:none;"><div class="loading">Loading clients…</div></div>
     <div id="v-timeoff" style="display:none;"><div class="loading">Loading…</div></div>
+    <div id="v-survey" style="display:none;"><div class="loading">Loading survey results…</div></div>
   </main>
 </div>
 
@@ -137,7 +146,7 @@
     t.addEventListener('click', function () {
       document.querySelectorAll('.tab').forEach(function (x) { x.classList.remove('on'); });
       t.classList.add('on');
-      ['diary', 'clients', 'timeoff'].forEach(function (v) { $('v-' + v).style.display = v === t.dataset.t ? 'block' : 'none'; });
+      ['diary', 'clients', 'timeoff', 'survey'].forEach(function (v) { $('v-' + v).style.display = v === t.dataset.t ? 'block' : 'none'; });
     });
   });
 
@@ -255,10 +264,74 @@
     }).catch(function () {});
   }
 
+  // ---------- Lash lift survey ----------
+  function loadSurvey() {
+    api('/api/admin/survey?survey=lash-lift').then(function (r) {
+      var v = $('v-survey');
+      if (!r.count) {
+        v.innerHTML = '<div class="empty">No survey answers yet.<br>Share the link and they’ll tally here as they arrive ✨<br><br>' +
+          '<a class="pill" href="lash-survey.html" target="_blank">Open the survey</a></div>';
+        return;
+      }
+      var rows = r.responses.map(function (x) { return x.payload || {}; });
+
+      function tally(get) {
+        var m = {};
+        rows.forEach(function (p) {
+          var val = get(p);
+          (Array.isArray(val) ? val : [val]).forEach(function (x) { if (x) m[x] = (m[x] || 0) + 1; });
+        });
+        return Object.keys(m).map(function (k) { return { k: k, n: m[k] }; })
+          .sort(function (a, b) { return b.n - a.n; });
+      }
+      function bars(title, get) {
+        var t = tally(get);
+        if (!t.length) return '';
+        var max = t[0].n;
+        return '<div class="q-head">' + title + '</div><div class="card">' + t.map(function (x) {
+          return '<div class="bar-row"><div class="bar-lbl"><span>' + esc(x.k) + '</span><span class="n">' + x.n + '</span></div>' +
+            '<div class="bar-track"><div class="bar-fill" style="width:' + Math.round(x.n / max * 100) + '%;"></div></div></div>';
+        }).join('') + '</div>';
+      }
+
+      var keen = rows.filter(function (p) { return p.interest === 'Definitely' || p.interest === 'Probably'; }).length;
+      var priceTop = tally(function (p) { return p.price; })[0];
+      var html = '<div class="stat-row">' +
+        '<div class="stat"><div class="n">' + r.count + '</div><div class="l">Answers</div></div>' +
+        '<div class="stat"><div class="n">' + Math.round(keen / r.count * 100) + '%</div><div class="l">Would book</div></div>' +
+        '<div class="stat"><div class="n" style="font-size:1.15rem;line-height:2.4rem;">' + (priceTop ? esc(priceTop.k) : '—') + '</div><div class="l">Top price pick</div></div></div>';
+
+      html += bars('Would they book one?', function (p) { return p.interest; });
+      html += bars('What feels like a fair price', function (p) { return p.price; });
+      html += bars('Lift only, or lift + tint', function (p) { return p.style; });
+      html += bars('How often they’d keep them up', function (p) { return p.frequency; });
+      html += bars('Tried a lash lift before?', function (p) { return p.had_before; });
+      html += bars('What matters most', function (p) { return p.matters; });
+
+      var comments = r.responses.filter(function (x) { return x.payload && x.payload.comments; });
+      if (comments.length) {
+        html += '<div class="q-head">In their words</div>' + comments.map(function (x) {
+          return '<div class="card"><div class="bk-notes">' + esc(x.payload.comments) + '</div>' +
+            (x.name ? '<div style="font-size:.78rem;color:var(--muted);margin-top:6px;">— ' + esc(x.name) + '</div>' : '') + '</div>';
+        }).join('');
+      }
+
+      var leads = r.responses.filter(function (x) { return x.payload && x.payload.notify === 'yes' && (x.name || x.contact); });
+      if (leads.length) {
+        html += '<div class="q-head">Want to hear when you launch (' + leads.length + ')</div>' + leads.map(function (x) {
+          return '<div class="card"><span class="bk-name">' + esc(x.name || 'No name') + '</span>' +
+            (x.contact ? '<div class="bk-contact"><span class="pill">' + esc(x.contact) + '</span></div>' : '') + '</div>';
+        }).join('');
+      }
+
+      v.innerHTML = html;
+    }).catch(function () {});
+  }
+
   function boot() {
     if (!TOKEN) { showLock(); return; }
     api('/api/admin/blocked').then(function () {
-      showApp(); loadDiary(); loadClients(); loadTimeOff();
+      showApp(); loadDiary(); loadClients(); loadTimeOff(); loadSurvey();
     }).catch(function () {});
   }
   boot();
