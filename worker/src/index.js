@@ -9,10 +9,12 @@
  *   GET  /api/booking?id=&token=
  *   POST /api/cancel  {id,token}
  *   POST /api/intake  {name,phone,email,booking_id,...answers}
+ *   POST /api/survey  {survey,...answers}   (mini market-research polls, e.g. lash lifts)
  * Admin (Authorization: Bearer ADMIN_TOKEN):
  *   GET  /api/admin/bookings?from=&to=
  *   GET  /api/admin/clients          (now includes latest intake per client)
  *   GET  /api/admin/intake?id=|phone=
+ *   GET  /api/admin/survey?survey=lash-lift
  *   GET  /api/admin/blocked
  *   POST /api/admin/block   {date,reason}
  *   POST /api/admin/unblock {date}
@@ -496,6 +498,46 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     return json({ ok: true, id, flagged: flags.length > 0 }, 200, cors);
   }
 
+  if (path === '/api/survey' && req.method === 'POST') {
+    const body = await req.json().catch(() => ({}));
+    if (body.website) return json({ ok: true }, 200, cors); // honeypot: pretend success
+
+    const s = (v, n) => String(v || '').trim().slice(0, n);
+    const p = {
+      had_before: s(body.had_before, 60),
+      interest: s(body.interest, 60),
+      style: s(body.style, 60),
+      price: s(body.price, 60),
+      frequency: s(body.frequency, 60),
+      matters: (Array.isArray(body.matters) ? body.matters : [])
+        .map(x => String(x).trim().slice(0, 60)).filter(Boolean).slice(0, 8),
+      comments: s(body.comments, 600),
+      notify: body.notify ? 'yes' : 'no',
+    };
+    if (!p.interest) return json({ error: 'interest_required' }, 400, cors);
+
+    const survey = s(body.survey, 40) || 'lash-lift';
+    const name = s(body.name, 120);
+    const contact = s(body.contact, 160);
+    const id = crypto.randomUUID().slice(0, 10);
+    await db.prepare(
+      `INSERT INTO survey_responses (id, survey, name, contact, payload, created_at)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind(id, survey, name, contact, JSON.stringify(p), new Date().toISOString()).run();
+
+    const lines = [
+      `\u{1F4AC} <b>Lash lift survey response</b>`,
+      `Would book: <b>${p.interest || '—'}</b> · Fair price: <b>${p.price || '—'}</b>`,
+      `Had one before: ${p.had_before || '—'} · Style: ${p.style || '—'} · Upkeep: ${p.frequency || '—'}`,
+    ];
+    if (p.matters.length) lines.push(`Matters most: ${p.matters.join(', ')}`);
+    if (p.comments) lines.push(`“${p.comments}”`);
+    if (name || contact) lines.push(`${name || 'No name'}${contact ? ' · ' + contact : ''}${p.notify === 'yes' ? ' · wants launch news' : ''}`);
+    ctx.waitUntil(telegram(env, lines.join('\n')));
+
+    return json({ ok: true, id }, 200, cors);
+  }
+
   return json({ error: 'not_found' }, 404, cors);
 }
 
@@ -619,6 +661,17 @@ async function handleAdmin(req, env, url, path, cors) {
       rows = results;
     }
     return json({ intake: rows.map(r => ({ ...r, payload: r.payload ? JSON.parse(r.payload) : undefined })) }, 200, cors);
+  }
+
+  if (path === '/api/admin/survey' && req.method === 'GET') {
+    const survey = String(url.searchParams.get('survey') || 'lash-lift').slice(0, 40);
+    const { results } = await db.prepare(
+      'SELECT id, survey, name, contact, payload, created_at FROM survey_responses WHERE survey = ? ORDER BY created_at DESC LIMIT 500'
+    ).bind(survey).all();
+    return json({
+      survey, count: results.length,
+      responses: results.map(r => ({ ...r, payload: r.payload ? JSON.parse(r.payload) : {} })),
+    }, 200, cors);
   }
 
   if (path === '/api/admin/blocked' && req.method === 'GET') {

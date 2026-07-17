@@ -71,6 +71,20 @@ INSERT OR IGNORE INTO addons (id, name, duration_min, price_aud, active) VALUES
 -- worker at submit time so the Studio Hub can show the safety-
 -- critical answers without parsing `payload` (the full JSON).
 -- ============================================================
+-- ============================================================
+-- Mini market-research surveys (e.g. lash-lift interest poll).
+-- One row per submission; `payload` holds the full answers.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS survey_responses (
+  id         TEXT PRIMARY KEY,
+  survey     TEXT NOT NULL DEFAULT 'lash-lift',
+  name       TEXT NOT NULL DEFAULT '',
+  contact    TEXT NOT NULL DEFAULT '',    -- phone / email / instagram, free-form
+  payload    TEXT NOT NULL DEFAULT '{}',  -- full answers as JSON
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_survey_created ON survey_responses(survey, created_at);
+
 CREATE TABLE IF NOT EXISTS intake_forms (
   id           TEXT PRIMARY KEY,
   booking_id   TEXT,                        -- optional link to a booking
