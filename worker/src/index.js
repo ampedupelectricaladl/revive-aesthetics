@@ -19,6 +19,7 @@
  *   POST /api/admin/block   {date,reason}
  *   POST /api/admin/unblock {date}
  *   POST /api/admin/cancel  {id}
+ *   POST /api/admin/send-confirmation {id, price_override?, intro?}  (re/send booking email, e.g. manual bookings)
  */
 
 const TZ = 'Australia/Adelaide';
@@ -138,11 +139,12 @@ async function sendEmail(env, to, subject, html) {
     'Content-Type: text/html; charset=UTF-8',
     '', html,
   ].join('\r\n');
-  await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+  const resp = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
     method: 'POST',
     headers: { authorization: 'Bearer ' + access_token, 'content-type': 'application/json' },
     body: JSON.stringify({ raw: b64url(raw) }),
   });
+  return resp.ok;
 }
 
 function emailShell(heading, inner) {
@@ -180,7 +182,7 @@ function confirmationEmail(b, cancelUrl, intakeUrl) {
     </p>
     <p style="line-height:1.6;font-size:12px;color:#6f5b58;text-align:center;">Takes about 2 minutes · kept completely private</p>` : '';
   return emailShell(`You're booked in, ${b.name.split(' ')[0]}`,
-    `<p style="line-height:1.7;margin:0;">Thank you for booking with Revive Aesthetics — here are your appointment details:</p>
+    `<p style="line-height:1.7;margin:0;">${b.intro || 'Thank you for booking with Revive Aesthetics — here are your appointment details:'}</p>
     ${bookingDetailsHtml(b)}
     ${intakeBlock}
     <p style="line-height:1.7;font-size:14px;color:#6f5b58;">Need to change or cancel? No stress —
@@ -698,6 +700,31 @@ async function handleAdmin(req, env, url, path, cors) {
     await db.prepare("UPDATE bookings SET status='cancelled', cancelled_at=? WHERE id=?")
       .bind(new Date().toISOString(), String(b.id || '')).run();
     return json({ ok: true }, 200, cors);
+  }
+
+  // Send (or resend) the branded confirmation email for an existing booking —
+  // used for bookings Stefani adds manually, which skip the public /api/book flow.
+  if (path === '/api/admin/send-confirmation' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    const row = await db.prepare(
+      `SELECT b.*, t.name AS tname, t.price_aud FROM bookings b JOIN treatments t ON t.id = b.treatment_id
+       WHERE b.id = ?`
+    ).bind(String(b.id || '')).first();
+    if (!row || row.status !== 'confirmed') return json({ error: 'not_found' }, 404, cors);
+    if (!row.email) return json({ error: 'no_email' }, 400, cors);
+    const what = row.tname + (row.addon_names ? ' + ' + row.addon_names : '');
+    const priceOf = await makePriceOf(db);
+    const price = Number.isFinite(b.price_override) ? b.price_override : priceOf(row);
+    const cancelUrl = `${CANCEL_BASE}?cancel=${row.id}&token=${row.cancel_token}`;
+    const sent = await sendEmail(env, row.email,
+      `Booking confirmed: ${what}, ${fmtDate(row.date)} ${fmtTime(row.start_min)} — Revive Aesthetics`,
+      confirmationEmail({
+        name: row.name, what, dateLabel: fmtDate(row.date), timeLabel: fmtTime(row.start_min),
+        duration: row.end_min - row.start_min, price,
+        intro: typeof b.intro === 'string' ? b.intro.slice(0, 500) : '',
+      }, cancelUrl,
+      `https://reviveaestheticsadl.com.au/intake.html?booking=${row.id}&name=${encodeURIComponent(row.name)}&phone=${encodeURIComponent(row.phone)}&email=${encodeURIComponent(row.email)}`));
+    return json({ ok: !!sent, sent_to: row.email }, 200, cors);
   }
 
   return json({ error: 'not_found' }, 404, cors);
