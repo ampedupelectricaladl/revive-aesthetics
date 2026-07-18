@@ -9,7 +9,7 @@
  *   GET  /api/booking?id=&token=
  *   POST /api/cancel  {id,token}
  *   POST /api/intake  {name,phone,email,booking_id,...answers}
- *   POST /api/consent {name,phone,email,booking_id,...answers}  (body-sculpt consent form)
+ *   POST /api/consent {form,name,phone,email,booking_id,...answers}  (sculpt consent forms: body-sculpt | face-sculpt)
  *   POST /api/survey  {survey,...answers}   (mini market-research polls, e.g. lash lifts)
  * Admin (Authorization: Bearer ADMIN_TOKEN):
  *   GET  /api/admin/bookings?from=&to=
@@ -501,7 +501,8 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     return json({ ok: true, id, flagged: flags.length > 0 }, 200, cors);
   }
 
-  // Body-sculpt consent form (lymphatic stomach massage · cupping · sculpting tools · LED)
+  // Sculpt consent forms (lymphatic massage · cupping · sculpting tools · LED):
+  // body-sculpt (stomach) and face-sculpt share the flow, differing in health questions.
   if (path === '/api/consent' && req.method === 'POST') {
     const body = await req.json().catch(() => ({}));
     if (body.website) return json({ ok: true }, 200, cors); // honeypot: pretend success
@@ -512,9 +513,22 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     if (name.length < 2) return json({ error: 'name_required' }, 400, cors);
 
     const yn = (v) => { const x = String(v || '').toLowerCase(); return x === 'yes' || x === 'no' ? x : ''; };
-    const HEALTH = ['pregnant', 'breastfeeding', 'abdo_surgery', 'hernia', 'clotting',
-                    'heart_kidney_lymph', 'skin_area', 'photosensitive'];
-    const p = { form: 'body-sculpt-consent' };
+    const CONSENT_FORMS = {
+      'body-sculpt': {
+        label: 'Body sculpt',
+        health: ['pregnant', 'breastfeeding', 'abdo_surgery', 'hernia', 'clotting',
+                 'heart_kidney_lymph', 'skin_area', 'photosensitive'],
+      },
+      'face-sculpt': {
+        label: 'Face sculpt',
+        health: ['pregnant', 'breastfeeding', 'face_surgery', 'injectables', 'coldsores',
+                 'clotting', 'skin_area', 'photosensitive'],
+      },
+    };
+    const formType = CONSENT_FORMS[body.form] ? body.form : 'body-sculpt';
+    const HEALTH = CONSENT_FORMS[formType].health;
+    const formLabel = CONSENT_FORMS[formType].label;
+    const p = { form: formType + '-consent' };
     for (const k of HEALTH) p[k] = yn(body[k]);
     if (HEALTH.some(k => !p[k])) return json({ error: 'health_required' }, 400, cors);
     p.other_conditions = s(body.other_conditions, 600);
@@ -527,7 +541,7 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     Object.assign(p, { c_accurate: true, c_treatment: true, c_results: true, c_aftercare: true });
 
     const flags = HEALTH.filter(k => p[k] === 'yes');
-    const summary = ('Body sculpt consent signed · photos: ' +
+    const summary = (formLabel + ' consent signed · photos: ' +
       (p.photo_consent === 'social' ? 'ok for socials' : 'file only') +
       (p.other_conditions ? ' · notes given' : '')).slice(0, 240);
     const id = crypto.randomUUID().slice(0, 10);
@@ -538,7 +552,7 @@ async function handlePublic(req, env, ctx, url, path, cors) {
            summary, flags.join(','), JSON.stringify(p), new Date().toISOString()).run();
 
     ctx.waitUntil(telegram(env,
-      `\u{1F4DD} <b>Body sculpt consent signed</b>\n${name}${phone ? ' · ' + phone : ''}\n${summary}` +
+      `\u{1F4DD} <b>${formLabel} consent signed</b>\n${name}${phone ? ' · ' + phone : ''}\n${summary}` +
       (flags.length ? `\n⚠️ <b>REVIEW: ${flags.join(', ').toUpperCase()}</b> — confirm suitability before treating` : '')));
 
     return json({ ok: true, id, flagged: flags.length > 0 }, 200, cors);
