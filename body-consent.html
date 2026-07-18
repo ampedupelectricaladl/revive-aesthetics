@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Body Sculpt Consent | Revive Aesthetics — Adelaide</title>
+<meta name="description" content="Consent form for your body sculpt session at Revive Aesthetics, Adelaide." />
+<meta name="theme-color" content="#2B0F1A" />
+<meta name="robots" content="noindex, nofollow" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --plum: #2B0F1A; --plum-soft: #3c1726; --cream: #F2E7CE; --cream-bg: #f7f0df;
+    --cream-card: #fbf6ea; --gold: #c2a878; --rose: #b58a90; --ink: #2b0f1a; --muted: #6f5b58;
+    --maxw: 760px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Jost', system-ui, sans-serif; color: var(--ink);
+    background: var(--cream-bg); line-height: 1.7; font-weight: 300;
+    -webkit-font-smoothing: antialiased; min-height: 100vh; display: flex; flex-direction: column;
+  }
+  h1, h2, h3 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; line-height: 1.1; }
+  a { color: inherit; }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; width: 100%; }
+  .eyebrow { font-size: 0.72rem; letter-spacing: 0.32em; text-transform: uppercase; font-weight: 400; color: var(--rose); margin-bottom: 12px; }
+
+  header.nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(43,15,26,0.96); backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(242,231,206,0.14);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+  .brand-logo { height: 36px; width: auto; }
+  .monogram { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 1.6rem; color: var(--cream); }
+  .nav-back { color: var(--cream); font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.82; }
+  .nav-back:hover { opacity: 1; }
+
+  .page-head { background: var(--plum); color: var(--cream); text-align: center; padding: 56px 0 50px; }
+  .page-head h1 { font-size: clamp(2rem, 6vw, 3rem); }
+  .page-head h1 em { font-style: italic; color: var(--gold); }
+  .page-head p { color: rgba(242,231,206,0.78); margin-top: 14px; font-size: 0.96rem; max-width: 520px; margin-left: auto; margin-right: auto; }
+
+  main { flex: 1; padding: 40px 0 90px; }
+
+  .intro {
+    background: var(--cream-card); border: 1px solid rgba(43,15,26,0.1); border-left: 3px solid var(--gold);
+    padding: 18px 22px; margin-bottom: 34px; font-size: 0.92rem; color: var(--muted);
+  }
+
+  .sec { margin-bottom: 42px; }
+  .sec > .eyebrow { color: var(--gold); }
+  .sec h2 { font-size: 1.55rem; margin-bottom: 6px; }
+  .sec .hint { color: var(--muted); font-size: 0.88rem; margin-bottom: 22px; }
+
+  .steps-card { background: #fff; border: 1px solid rgba(43,15,26,0.12); padding: 6px 24px; }
+  .steps-card .row { display: flex; gap: 16px; padding: 14px 0; border-bottom: 1px solid rgba(43,15,26,0.07); align-items: baseline; }
+  .steps-card .row:last-child { border-bottom: none; }
+  .steps-card .n { font-family: 'Cormorant Garamond', serif; color: var(--gold); font-size: 1.15rem; flex: 0 0 18px; }
+  .steps-card .t { font-weight: 400; }
+  .steps-card .d { color: var(--muted); font-size: 0.88rem; }
+
+  .field { display: grid; gap: 6px; margin-bottom: 18px; }
+  label.lbl, .q-label { font-size: 0.9rem; color: var(--ink); font-weight: 400; }
+  .field .sub { font-size: 0.78rem; color: var(--muted); }
+  input[type=text], input[type=tel], input[type=email], textarea {
+    font-family: 'Jost', sans-serif; font-size: 0.98rem; padding: 12px 14px;
+    border: 1px solid rgba(43,15,26,0.18); background: #fff; color: var(--ink); border-radius: 0; width: 100%;
+  }
+  input:focus, textarea:focus { outline: none; border-color: var(--plum); }
+  textarea { resize: vertical; min-height: 72px; }
+
+  .opt {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border: 1px solid rgba(43,15,26,0.14); background: #fff; cursor: pointer; font-size: 0.92rem; transition: all .15s;
+  }
+  .opt:hover { border-color: var(--gold); }
+  .opt input { accent-color: var(--plum); width: 16px; height: 16px; flex-shrink: 0; }
+  .opt.checked { border-color: var(--plum); background: var(--cream-card); }
+
+  .q { padding: 14px 0; border-bottom: 1px solid rgba(43,15,26,0.08); display: flex; justify-content: space-between; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .q:last-child { border-bottom: none; }
+  .q-label { flex: 1; min-width: 220px; }
+  .yn { display: flex; gap: 8px; flex-shrink: 0; }
+  .yn label {
+    display: inline-flex; align-items: center; gap: 7px; padding: 8px 15px;
+    border: 1px solid rgba(43,15,26,0.2); cursor: pointer; font-size: 0.82rem; letter-spacing: 0.04em; background: #fff; transition: all .15s;
+  }
+  .yn label:hover { border-color: var(--gold); }
+  .yn input { display: none; }
+  .yn label.on { background: var(--plum); color: var(--cream); border-color: var(--plum); }
+  .yn label.on.warn { background: #8c2f39; border-color: #8c2f39; }
+
+  .flag-note {
+    display: none; margin-top: 16px; padding: 14px 18px; background: #fceeef;
+    border: 1px solid #e3b8bd; color: #7a2a33; font-size: 0.88rem;
+  }
+  .flag-note.show { display: block; }
+
+  .consent { background: var(--cream-card); border: 1px solid rgba(43,15,26,0.1); padding: 22px 24px; }
+  .consent .opt { border: none; background: none; padding: 8px 0; align-items: flex-start; }
+  .consent .opt:hover { border: none; }
+  .consent .opt input { margin-top: 3px; }
+
+  .photo-opts { display: grid; gap: 10px; }
+  .photo-opts .opt { align-items: flex-start; padding: 14px 16px; }
+  .photo-opts .opt input { margin-top: 4px; }
+
+  .btn {
+    display: inline-block; font-family: 'Jost', sans-serif; font-weight: 400;
+    letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.74rem;
+    padding: 15px 40px; border: 1px solid var(--plum); cursor: pointer;
+    transition: all .25s ease; background: var(--plum); color: var(--cream);
+  }
+  .btn:hover { background: transparent; color: var(--plum); }
+  .btn[disabled] { opacity: .45; pointer-events: none; }
+
+  .submit-row { margin-top: 30px; text-align: center; }
+  .msg { text-align: center; padding: 12px; font-size: 0.9rem; }
+  .msg.err { color: #8c2f39; }
+
+  .done-card { background: var(--cream-card); border: 1px solid var(--gold); text-align: center; padding: 56px 34px; display: none; }
+  .done-card.show { display: block; }
+  .done-card .tick { width: 54px; height: 54px; margin: 0 auto 20px; color: var(--gold); }
+  .done-card h2 { font-size: 2rem; margin-bottom: 10px; }
+  .done-card p { color: var(--muted); font-size: 0.96rem; max-width: 440px; margin: 0 auto 8px; }
+
+  footer.site { background: var(--plum); color: var(--cream); text-align: center; padding: 40px 0 34px; border-top: 1px solid rgba(242,231,206,0.12); }
+  footer.site .copy { font-size: 0.72rem; color: rgba(242,231,206,0.5); letter-spacing: 0.04em; }
+
+  @media (max-width: 560px) { .q { align-items: flex-start; } }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="index.html" style="display:flex;align-items:center;gap:12px;">
+      <img src="assets/logo-mark-cream.png" alt="Revive Aesthetics" class="brand-logo"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='inline';" />
+      <span class="monogram" style="display:none;">RA</span>
+    </a>
+    <a class="nav-back" href="index.html">&larr; Back to site</a>
+  </div>
+</header>
+
+<section class="page-head">
+  <div class="wrap">
+    <p class="eyebrow" style="color:var(--rose);">Before your session</p>
+    <h1>Body sculpt <em>consent</em></h1>
+    <p>Lymphatic stomach massage &middot; cupping &middot; sculpting &middot; LED light therapy. A quick health check and consent so your session is safe and completely tailored to you.</p>
+  </div>
+</section>
+
+<main>
+  <div class="wrap">
+
+    <div class="intro" id="form-intro">
+      This treatment works over the stomach area to encourage lymphatic drainage and contour the skin. The quick questions below
+      let Stefani make sure it's right for your body on the day. If anything needs a closer look, she'll simply have a chat with
+      you before you begin.
+    </div>
+
+    <form id="consent-form" novalidate>
+
+      <!-- 1. Details -->
+      <div class="sec">
+        <p class="eyebrow">Section 1</p>
+        <h2>Your details</h2>
+        <p class="hint">So your form is matched to your booking.</p>
+        <div class="field"><label class="lbl" for="f-name">Full name</label><input type="text" id="f-name" autocomplete="name" placeholder="Your full name" /></div>
+        <div class="field"><label class="lbl" for="f-phone">Mobile</label><input type="tel" id="f-phone" autocomplete="tel" placeholder="04xx xxx xxx" /></div>
+        <div class="field"><label class="lbl" for="f-email">Email <span class="sub">(optional)</span></label><input type="email" id="f-email" autocomplete="email" placeholder="you@email.com" /></div>
+      </div>
+
+      <!-- 2. Your session -->
+      <div class="sec">
+        <p class="eyebrow">Section 2</p>
+        <h2>What your session involves</h2>
+        <p class="hint">A little run-through, so nothing is a surprise.</p>
+        <div class="steps-card">
+          <div class="row"><span class="n">1</span><div><span class="t">Before photos &amp; video</span> <span class="d">— taken prior to starting, for comparison</span></div></div>
+          <div class="row"><span class="n">2</span><div><span class="t">Lymphatic stomach massage</span> <span class="d">— manual technique to stimulate lymphatic drainage</span></div></div>
+          <div class="row"><span class="n">3</span><div><span class="t">Cupping</span> <span class="d">— targeted suction therapy on the stomach area</span></div></div>
+          <div class="row"><span class="n">4</span><div><span class="t">Sculpting</span> <span class="d">— tool-assisted contouring work</span></div></div>
+          <div class="row"><span class="n">5</span><div><span class="t">LED light therapy</span> <span class="d">— applied to the stomach to finish the treatment</span></div></div>
+          <div class="row"><span class="n">6</span><div><span class="t">After photos &amp; video</span> <span class="d">— taken once complete, to show the results</span></div></div>
+        </div>
+      </div>
+
+      <!-- 3. Health check -->
+      <div class="sec">
+        <p class="eyebrow">Section 3</p>
+        <h2>Quick health check</h2>
+        <p class="hint">Answer honestly — a "yes" doesn't always mean you can't be treated, it just means Stefani will check in with you first.</p>
+
+        <div class="q"><span class="q-label">Are you pregnant, or is there any chance you may be?</span>
+          <span class="yn" data-warn="1"><label><input type="radio" name="pregnant" value="yes">Yes</label><label><input type="radio" name="pregnant" value="no">No</label></span></div>
+        <div class="q"><span class="q-label">Are you currently breastfeeding?</span>
+          <span class="yn" data-warn="1"><label><input type="radio" name="breastfeeding" value="yes">Yes</label><label><input type="radio" name="breastfeeding" value="no">No</label></span></div>
+        <div class="q"><span class="q-label">Have you had abdominal surgery in the last 6 months?</span>
+          <span class="yn" data-warn="1"><label><input type="radio" name="abdo_surgery" value="yes">Yes</label><label><input type="radio" name="abdo_surgery" value="no">No</label></span></div>
+        <div class="q"><span class="q-label">Do you have a hernia or abdominal separation?</span>
+          <span class="yn" data-warn="1"><label><input type="radio" name="hernia" value="yes">Yes</label><label><input type="radio" name="hernia" value="no">No</label></span></div>
+        <div class="q"><span class="q-label">Do you have a blood clotting disorder, or take blood-thinning medication?</span>
+          <span class="yn" data-warn="1"><label><input type="radio" name="clotting" value="yes">Yes</label><label><input type="radio" name="clotting" value="no">No</label></span></div>
+        <div class="q"><span class="q-label">Do you have a heart, kidney or lymphatic condition?</span>
+          <span class="yn" data-warn="1"><label><input type="radio" name="heart_kidney_lymph" value="yes">Yes</label><label><input type="radio" name="heart_kidney_lymph" value="no">No</label></span></div>
+        <div class="q"><span class="q-label">Any skin conditions, wounds or infections on your stomach area?</span>
+          <span class="yn" data-warn="1"><label><input type="radio" name="skin_area" value="yes">Yes</label><label><input type="radio" name="skin_area" value="no">No</label></span></div>
+        <div class="q"><span class="q-label">Do you have epilepsy or light sensitivity, or take medication that makes skin light-sensitive?</span>
+          <span class="yn" data-warn="1"><label><input type="radio" name="photosensitive" value="yes">Yes</label><label><input type="radio" name="photosensitive" value="no">No</label></span></div>
+
+        <div class="flag-note" id="flag-note">Thanks for letting us know — Stefani will have a quick chat with you before your session to make sure everything is safe and comfortable for you. Nothing to worry about.</div>
+
+        <div class="field" style="margin-top:20px;">
+          <label class="lbl" for="f-other">Anything else we should know? <span class="sub">(medications, medical conditions, recent treatments — optional)</span></label>
+          <textarea id="f-other" placeholder="Type here if there's anything at all"></textarea>
+        </div>
+      </div>
+
+      <!-- 4. Photos -->
+      <div class="sec">
+        <p class="eyebrow">Section 4</p>
+        <h2>Photos &amp; video</h2>
+        <p class="hint">Before and after photos and video are part of your session. Choose how they may be used:</p>
+        <div class="photo-opts">
+          <label class="opt"><input type="radio" name="photos" value="social"><span>I'm happy for my before &amp; after photos and video to be shared on Revive Aesthetics' social media and website.</span></label>
+          <label class="opt"><input type="radio" name="photos" value="private"><span>Please keep my photos and video for my treatment records only.</span></label>
+        </div>
+      </div>
+
+      <!-- 5. Consent -->
+      <div class="sec">
+        <p class="eyebrow">Section 5</p>
+        <h2>Consent</h2>
+        <div class="consent">
+          <label class="opt"><input type="checkbox" id="c-accurate"><span>The information above is true and accurate, and I'll let Revive know if anything changes before my session.</span></label>
+          <label class="opt"><input type="checkbox" id="c-treatment"><span>I understand my session involves lymphatic stomach massage, cupping, sculpting tools and LED light therapy, and that cupping and sculpting can leave temporary redness, marks or mild tenderness that usually settle within a few days.</span></label>
+          <label class="opt"><input type="checkbox" id="c-results"><span>I understand this is a cosmetic wellness treatment, results vary from person to person, and it is not a medical treatment or a substitute for medical advice.</span></label>
+          <label class="opt"><input type="checkbox" id="c-aftercare"><span>I agree to follow the aftercare guidance I'm given, and I agree to the cancellation policy.</span></label>
+
+          <div class="field" style="margin-top:18px;">
+            <label class="lbl" for="f-sign">Type your full name to sign</label>
+            <input type="text" id="f-sign" placeholder="Your full name" autocomplete="name" />
+          </div>
+        </div>
+      </div>
+
+      <!-- honeypot -->
+      <div style="position:absolute;left:-9999px;" aria-hidden="true"><label>Website</label><input type="text" id="f-website" tabindex="-1" autocomplete="off" /></div>
+
+      <div class="msg err" id="form-msg"></div>
+      <div class="submit-row"><button type="submit" class="btn" id="submit-btn">Sign &amp; submit</button></div>
+    </form>
+
+    <div class="done-card" id="done-card">
+      <svg class="tick" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="24" cy="24" r="21"/><path d="M15 24.5l6.5 6.5L33 18"/>
+      </svg>
+      <h2>Thank you</h2>
+      <p id="done-msg">Your consent form is with Stefani — that's everything sorted before your session. See you soon!</p>
+      <p style="margin-top:18px;"><a href="index.html" class="btn" style="text-decoration:none;">Back to site</a></p>
+    </div>
+
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap"><div class="copy">© <span id="yr"></span> Revive Aesthetics · Adelaide, South Australia · 0404 967 051</div></div>
+</footer>
+
+<script>
+  window.REVIVE_API_BASE = "https://revive-booking.ampedup.workers.dev";
+</script>
+<script>
+(function () {
+  var API = window.REVIVE_API_BASE;
+  var $ = function (id) { return document.getElementById(id); };
+  $('yr').textContent = new Date().getFullYear();
+
+  // prefill from ?name=&phone=&email=&booking=
+  var qs = new URLSearchParams(location.search);
+  if (qs.get('name')) $('f-name').value = qs.get('name');
+  if (qs.get('phone')) $('f-phone').value = qs.get('phone');
+  if (qs.get('email')) $('f-email').value = qs.get('email');
+  var bookingId = qs.get('booking') || '';
+
+  document.querySelectorAll('.opt input').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      if (cb.type === 'radio') {
+        document.querySelectorAll('.opt input[name="' + cb.name + '"]').forEach(function (r) {
+          r.closest('.opt').classList.toggle('checked', r.checked);
+        });
+      } else {
+        cb.closest('.opt').classList.toggle('checked', cb.checked);
+      }
+    });
+  });
+
+  function refreshYN() {
+    var anyWarn = false;
+    document.querySelectorAll('.yn').forEach(function (grp) {
+      var warn = grp.dataset.warn === '1';
+      grp.querySelectorAll('label').forEach(function (l) {
+        var input = l.querySelector('input');
+        l.classList.toggle('on', input.checked);
+        l.classList.toggle('warn', input.checked && warn && input.value === 'yes');
+        if (input.checked && warn && input.value === 'yes') anyWarn = true;
+      });
+    });
+    $('flag-note').classList.toggle('show', anyWarn);
+  }
+  document.querySelectorAll('.yn input').forEach(function (r) { r.addEventListener('change', refreshYN); });
+
+  function radio(name) { var el = document.querySelector('input[name="' + name + '"]:checked'); return el ? el.value : ''; }
+
+  var HEALTH = ['pregnant', 'breastfeeding', 'abdo_surgery', 'hernia', 'clotting', 'heart_kidney_lymph', 'skin_area', 'photosensitive'];
+
+  $('consent-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = $('form-msg'); msg.textContent = '';
+    var name = $('f-name').value.trim();
+    var phone = $('f-phone').value.trim();
+    var email = $('f-email').value.trim();
+    var sign = $('f-sign').value.trim();
+    if (name.length < 2) return fail('Please enter your name.');
+    if (phone.replace(/\D/g, '').length < 8) return fail('Please enter a valid phone number.');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('That email doesn\'t look right — or leave it blank.');
+    for (var i = 0; i < HEALTH.length; i++) {
+      if (!radio(HEALTH[i])) return fail('Please answer every question in the health check.');
+    }
+    if (!radio('photos')) return fail('Please choose how your photos may be used.');
+    if (!$('c-accurate').checked || !$('c-treatment').checked || !$('c-results').checked || !$('c-aftercare').checked) {
+      return fail('Please tick the four consent boxes to continue.');
+    }
+    if (sign.length < 2) return fail('Please type your name to sign.');
+
+    var body = {
+      booking_id: bookingId, name: name, phone: phone, email: email,
+      other_conditions: $('f-other').value,
+      photo_consent: radio('photos'),
+      c_accurate: true, c_treatment: true, c_results: true, c_aftercare: true,
+      signature: sign, website: $('f-website').value,
+    };
+    HEALTH.forEach(function (k) { body[k] = radio(k); });
+
+    var btn = $('submit-btn'); btn.disabled = true; btn.textContent = 'Sending…';
+    fetch(API + '/api/consent', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, data: j }; }); })
+      .then(function (r) {
+        if (!r.ok) { btn.disabled = false; btn.textContent = 'Sign & submit'; return fail('Something went wrong — please try again, or call Stefani on 0404 967 051.'); }
+        $('consent-form').style.display = 'none'; $('form-intro').style.display = 'none';
+        if (r.data.flagged) $('done-msg').textContent = "Your consent form is with Stefani. She'll check in with you about a couple of your answers before your session — nothing to worry about.";
+        $('done-card').classList.add('show');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }).catch(function () {
+        btn.disabled = false; btn.textContent = 'Sign & submit';
+        fail('Connection problem — please try again, or call 0404 967 051.');
+      });
+
+    function fail(t) { msg.textContent = t; msg.scrollIntoView({ behavior: 'smooth', block: 'center' }); return false; }
+  });
+
+  function fail(t) { var m = $('form-msg'); m.textContent = t; m.scrollIntoView({ behavior: 'smooth', block: 'center' }); return false; }
+})();
+</script>
+</body>
+</html>

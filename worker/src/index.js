@@ -9,6 +9,7 @@
  *   GET  /api/booking?id=&token=
  *   POST /api/cancel  {id,token}
  *   POST /api/intake  {name,phone,email,booking_id,...answers}
+ *   POST /api/consent {name,phone,email,booking_id,...answers}  (body-sculpt consent form)
  *   POST /api/survey  {survey,...answers}   (mini market-research polls, e.g. lash lifts)
  * Admin (Authorization: Bearer ADMIN_TOKEN):
  *   GET  /api/admin/bookings?from=&to=
@@ -495,6 +496,49 @@ async function handlePublic(req, env, ctx, url, path, cors) {
 
     ctx.waitUntil(telegram(env,
       `\u{1F4CB} <b>New pre-treatment form</b>\n${name}${phone ? ' · ' + phone : ''}\n${summary || '—'}` +
+      (flags.length ? `\n⚠️ <b>REVIEW: ${flags.join(', ').toUpperCase()}</b> — confirm suitability before treating` : '')));
+
+    return json({ ok: true, id, flagged: flags.length > 0 }, 200, cors);
+  }
+
+  // Body-sculpt consent form (lymphatic stomach massage · cupping · sculpting tools · LED)
+  if (path === '/api/consent' && req.method === 'POST') {
+    const body = await req.json().catch(() => ({}));
+    if (body.website) return json({ ok: true }, 200, cors); // honeypot: pretend success
+    const s = (v, n) => String(v || '').trim().slice(0, n);
+    const name = s(body.name, 120);
+    const phone = s(body.phone, 40);
+    const email = s(body.email, 160).toLowerCase();
+    if (name.length < 2) return json({ error: 'name_required' }, 400, cors);
+
+    const yn = (v) => { const x = String(v || '').toLowerCase(); return x === 'yes' || x === 'no' ? x : ''; };
+    const HEALTH = ['pregnant', 'breastfeeding', 'abdo_surgery', 'hernia', 'clotting',
+                    'heart_kidney_lymph', 'skin_area', 'photosensitive'];
+    const p = { form: 'body-sculpt-consent' };
+    for (const k of HEALTH) p[k] = yn(body[k]);
+    if (HEALTH.some(k => !p[k])) return json({ error: 'health_required' }, 400, cors);
+    p.other_conditions = s(body.other_conditions, 600);
+    p.photo_consent = ['social', 'private'].includes(body.photo_consent) ? body.photo_consent : '';
+    if (!p.photo_consent) return json({ error: 'photo_choice_required' }, 400, cors);
+    p.signature = s(body.signature, 120);
+    if (!body.c_accurate || !body.c_treatment || !body.c_results || !body.c_aftercare || p.signature.length < 2) {
+      return json({ error: 'consent_required' }, 400, cors);
+    }
+    Object.assign(p, { c_accurate: true, c_treatment: true, c_results: true, c_aftercare: true });
+
+    const flags = HEALTH.filter(k => p[k] === 'yes');
+    const summary = ('Body sculpt consent signed · photos: ' +
+      (p.photo_consent === 'social' ? 'ok for socials' : 'file only') +
+      (p.other_conditions ? ' · notes given' : '')).slice(0, 240);
+    const id = crypto.randomUUID().slice(0, 10);
+    await db.prepare(
+      `INSERT INTO intake_forms (id, booking_id, name, phone, email, summary, flags, payload, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, s(body.booking_id, 16) || null, name, phone, email,
+           summary, flags.join(','), JSON.stringify(p), new Date().toISOString()).run();
+
+    ctx.waitUntil(telegram(env,
+      `\u{1F4DD} <b>Body sculpt consent signed</b>\n${name}${phone ? ' · ' + phone : ''}\n${summary}` +
       (flags.length ? `\n⚠️ <b>REVIEW: ${flags.join(', ').toUpperCase()}</b> — confirm suitability before treating` : '')));
 
     return json({ ok: true, id, flagged: flags.length > 0 }, 200, cors);
