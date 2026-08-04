@@ -61,6 +61,13 @@
       "closes": "21:00"
     }
   ],
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "5",
+    "reviewCount": "8",
+    "bestRating": "5",
+    "worstRating": "1"
+  },
   "makesOffer": [
     { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "PDRN Microneedling Booster" } },
     { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "LED Light Therapy" } },
@@ -285,6 +292,54 @@
   .why-item .ico svg { width: 100%; height: 100%; }
   .why-item h3 { font-size: 1.35rem; margin-bottom: 8px; }
   .why-item p { color: var(--muted); font-size: 0.92rem; }
+
+  /* ---------- Reviews ---------- */
+  .reviews { background: var(--plum); color: var(--cream); }
+  .reviews .section-head .divider { background: rgba(194,168,120,0.35); }
+  .reviews .section-head .eyebrow { color: var(--gold); }
+  .reviews .section-head h2 { color: var(--cream); }
+  .reviews .section-head p { color: rgba(242,231,206,0.68); }
+  .reviews-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 22px;
+  }
+  .review-card {
+    background: rgba(242,231,206,0.055);
+    border: 1px solid rgba(242,231,206,0.13);
+    border-radius: 3px;
+    padding: 30px 26px 24px;
+    display: flex;
+    flex-direction: column;
+  }
+  .review-stars { color: var(--gold); font-size: 0.95rem; letter-spacing: 3px; margin-bottom: 16px; }
+  .review-quote {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-style: italic;
+    font-size: 1.05rem;
+    line-height: 1.68;
+    color: rgba(242,231,206,0.86);
+    flex: 1;
+    margin-bottom: 22px;
+  }
+  .review-name {
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  .reviews-cta { text-align: center; margin-top: 40px; }
+  .reviews-cta a {
+    color: rgba(242,231,206,0.52);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    transition: color .2s;
+  }
+  .reviews-cta a:hover { color: var(--gold); }
+  @media (max-width: 680px) { .reviews-grid { grid-template-columns: 1fr; } }
+  @media (min-width: 681px) and (max-width: 1020px) { .reviews-grid { grid-template-columns: repeat(2, 1fr); } }
 
   /* ---------- Contact ---------- */
   .contact { background: var(--cream-bg); }
@@ -612,6 +667,53 @@
         <h3>Real Results</h3>
         <p>A focus on treatments that create visible, lasting change in the health and look of your skin.</p>
       </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== REVIEWS ===================== -->
+<section class="reviews" id="reviews-section">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="divider"></div>
+      <p class="eyebrow">What our clients say</p>
+      <h2>8 five-star reviews on Google</h2>
+      <p>All unprompted, all verified on Google.</p>
+    </div>
+    <div class="reviews-grid">
+      <div class="review-card reveal">
+        <div class="review-stars">★★★★★</div>
+        <p class="review-quote">"I recently had PDRN microneedling done, and I couldn't recommend this clinic enough! I was extremely nervous before my appointment and my skin is quite sensitive — but from the moment I arrived, I felt completely at ease. She was so professional, kind, and patient. I felt genuinely looked after every step of the way."</p>
+        <p class="review-name">Melani M. — PDRN Microneedling</p>
+      </div>
+      <div class="review-card reveal">
+        <div class="review-stars">★★★★★</div>
+        <p class="review-quote">"I've been seeing Stefani for over two years and can honestly say she is one of the most caring, knowledgeable and professional people I've come across in the industry. Every appointment is tailored to my individual skin concerns and goals — never a one-size-fits-all approach."</p>
+        <p class="review-name">Stjepan M. — Client for 2+ Years</p>
+      </div>
+      <div class="review-card reveal">
+        <div class="review-stars">★★★★★</div>
+        <p class="review-quote">"I've been seeing Stefani for my skin treatments and I honestly couldn't recommend her more. She's incredibly knowledgeable, professional, and always takes the time to explain everything. My skin has improved so much, and I always leave feeling refreshed and confident."</p>
+        <p class="review-name">Isabella G. — Skin Treatments</p>
+      </div>
+      <div class="review-card reveal">
+        <div class="review-stars">★★★★★</div>
+        <p class="review-quote">"I always have such a great experience seeing Stefani! She is incredibly knowledgeable and takes the time to explain everything clearly, making me feel confident in the treatment that was right for me. You can tell she's genuinely passionate about helping her clients achieve the best results."</p>
+        <p class="review-name">Jessica I. — Skin Consultation</p>
+      </div>
+      <div class="review-card reveal">
+        <div class="review-stars">★★★★★</div>
+        <p class="review-quote">"Stefani is so passionate about what she does, and it really shows! She's incredibly knowledgeable, takes the time to educate me on my skin, and always makes me feel comfortable and confident. I always leave feeling so happy with my results."</p>
+        <p class="review-name">Holly J. — Regular Client</p>
+      </div>
+      <div class="review-card reveal">
+        <div class="review-stars">★★★★★</div>
+        <p class="review-quote">"Stefani is the best of the best! She takes a holistic approach to skin and beauty and created a personalised treatment plan for my skin. She always makes me feel so comfortable and does an amazing job every time. I get so many compliments on my skin!"</p>
+        <p class="review-name">Alesandra T. — Personalised Plan</p>
+      </div>
+    </div>
+    <div class="reviews-cta">
+      <a href="https://g.page/r/CcArQkKpzItSEBM" target="_blank" rel="noopener noreferrer">Read all reviews on Google ↗</a>
     </div>
   </div>
 </section>
