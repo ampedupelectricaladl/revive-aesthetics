@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Korean Lash Lift Aftercare Card — Revive Aesthetics</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #1a0810;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px 16px;
+      min-height: 100vh;
+    }
+
+    .card {
+      background: #2B0F1A;
+      color: #F2E7CE;
+      font-family: 'Jost', sans-serif;
+      font-weight: 300;
+      width: 100%;
+      max-width: 720px;
+      padding: 56px 64px 52px;
+    }
+
+    @media (max-width: 600px) {
+      .card { padding: 40px 28px 40px; }
+    }
+
+    /* Logo */
+    .logo-wrap { text-align: center; margin-bottom: 30px; }
+    .logo-wrap img { height: 70px; }
+
+    /* Heading */
+    h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 600;
+      font-size: 2.6rem;
+      text-align: center;
+      letter-spacing: 0.01em;
+      line-height: 1.1;
+      color: #F2E7CE;
+    }
+
+    .treatment-name {
+      font-family: 'Jost', sans-serif;
+      font-weight: 400;
+      font-size: 0.85rem;
+      letter-spacing: 0.25em;
+      text-align: center;
+      color: #F2E7CE;
+      text-transform: uppercase;
+      margin-top: 10px;
+    }
+
+    /* Dividers */
+    .rule {
+      border: none;
+      border-top: 1px solid rgba(242,231,206,0.35);
+      margin: 28px 0;
+    }
+
+    /* Intro */
+    .intro {
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      font-size: 1rem;
+      line-height: 1.8;
+      text-align: center;
+      color: #F2E7CE;
+    }
+
+    /* Section label */
+    .sec {
+      font-family: 'Jost', sans-serif;
+      font-weight: 500;
+      font-size: 0.68rem;
+      letter-spacing: 0.28em;
+      text-align: center;
+      text-transform: uppercase;
+      color: #F2E7CE;
+      margin-bottom: 22px;
+    }
+
+    /* Timeline */
+    .timeline { display: flex; flex-direction: column; gap: 16px; margin-bottom: 4px; }
+
+    .tl-row { display: grid; grid-template-columns: 108px 1fr; gap: 12px; }
+
+    .tl-time {
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      font-weight: 600;
+      font-size: 0.92rem;
+      color: #F2E7CE;
+      padding-top: 2px;
+    }
+
+    .tl-text {
+      font-size: 0.86rem;
+      line-height: 1.65;
+      color: #F2E7CE;
+    }
+
+    /* Do's & Don'ts */
+    .dos-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    @media (max-width: 500px) {
+      .dos-grid { grid-template-columns: 1fr; gap: 20px; }
+      .tl-row { grid-template-columns: 90px 1fr; }
+    }
+
+    .col-label {
+      font-family: 'Jost', sans-serif;
+      font-weight: 500;
+      font-size: 0.72rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    .col-label.do   { color: #7ec98c; }
+    .col-label.dont { color: #d47a7a; }
+
+    ul.items { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+
+    ul.items li {
+      font-size: 0.84rem;
+      line-height: 1.5;
+      color: #F2E7CE;
+      padding-left: 18px;
+      position: relative;
+    }
+
+    ul.items li::before {
+      position: absolute;
+      left: 0;
+      font-size: 0.76rem;
+      top: 1px;
+    }
+
+    .do   li::before { content: "•"; color: #7ec98c; }
+    .dont li::before { content: "•"; color: #d47a7a; }
+
+    /* Contact */
+    .contact-text {
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      font-size: 0.97rem;
+      line-height: 1.8;
+      text-align: center;
+      color: #F2E7CE;
+    }
+
+    /* Next treatment */
+    .next-text {
+      font-size: 0.86rem;
+      line-height: 1.8;
+      text-align: center;
+      color: #F2E7CE;
+    }
+
+    /* Footer */
+    .footer { text-align: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(242,231,206,0.25); }
+
+    .footer-name {
+      font-family: 'Jost', sans-serif;
+      font-weight: 600;
+      font-size: 0.75rem;
+      letter-spacing: 0.26em;
+      text-transform: uppercase;
+      color: #F2E7CE;
+    }
+
+    .footer-sub {
+      font-family: 'Jost', sans-serif;
+      font-weight: 300;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      color: rgba(242,231,206,0.65);
+      margin-top: 5px;
+    }
+
+    @media print {
+      body { background: #2B0F1A; padding: 0; }
+      .card { max-width: 100%; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <div class="logo-wrap">
+    <img src="../assets/logo-mark-cream.png" alt="RA">
+  </div>
+
+  <h1>Post - Treatment Aftercare</h1>
+  <p class="treatment-name">Korean Lash Lift</p>
+
+  <hr class="rule">
+
+  <p class="intro">Your lashes have just been beautifully lifted and set. The next 24–48 hours<br>
+  are critical for locking in your results — please follow these guidelines carefully.</p>
+
+  <hr class="rule">
+
+  <p class="sec">Recovery Timeline</p>
+
+  <div class="timeline">
+    <div class="tl-row">
+      <span class="tl-time">0–24 hrs</span>
+      <span class="tl-text">Keep lashes completely dry. No water, steam, sweat or humidity. The lifting solution is still setting — any moisture now can cause lashes to drop or lose their shape.</span>
+    </div>
+    <div class="tl-row">
+      <span class="tl-time">24–48 hrs</span>
+      <span class="tl-text">Lashes are settling into their new shape. Continue to be gentle — avoid rubbing your eyes and try to sleep on your back where possible.</span>
+    </div>
+    <div class="tl-row">
+      <span class="tl-time">48–72 hrs</span>
+      <span class="tl-text">Your lift is fully set. You can resume normal cleansing and carefully apply mascara if desired.</span>
+    </div>
+    <div class="tl-row">
+      <span class="tl-time">Week 2–8</span>
+      <span class="tl-text">Enjoy your lifted lashes! Nourish them with a lash serum or conditioning oil to keep them healthy. Results last 6–8 weeks.</span>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <p class="sec">Do's &amp; Don'ts</p>
+
+  <div class="dos-grid">
+    <div>
+      <p class="col-label do">✓ Do</p>
+      <ul class="items do">
+        <li>Keep lashes dry for the first 24 hours</li>
+        <li>Sleep on your back or use a silk pillowcase</li>
+        <li>Gently comb lashes upward daily with a spoolie</li>
+        <li>Apply a nourishing lash serum or castor oil</li>
+        <li>Use an oil-free cleanser gently around the eyes</li>
+        <li>Wear mascara after 48 hours if desired</li>
+      </ul>
+    </div>
+    <div>
+      <p class="col-label dont">✕ Don't</p>
+      <ul class="items dont">
+        <li>Get lashes wet for the first 24 hours (no swimming, steam or sweating)</li>
+        <li>Rub or pull at your lashes</li>
+        <li>Use oil-based makeup removers around the eyes</li>
+        <li>Use waterproof mascara — very difficult to remove without tugging</li>
+        <li>Sleep face-down in the first 48 hours</li>
+        <li>Use an eyelash curler — your lashes are already lifted!</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <p class="sec">When to Contact Us</p>
+
+  <p class="contact-text">
+    Some mild redness or sensitivity around the eye area is normal and will settle quickly.
+    If you experience prolonged irritation, unusual swelling, or any unexpected reaction to the treatment,
+    please reach out straight away.<br><br>
+    DM us on Instagram @reviveaesthetics.adl or call Stefani on 0404 967 051.
+  </p>
+
+  <hr class="rule">
+
+  <p class="sec">Your Next Treatment</p>
+
+  <p class="next-text">
+    For best results, a Korean Lash Lift is recommended every 6–8 weeks to keep your lashes
+    beautifully lifted and in their best condition. We recommend booking your next appointment
+    before leaving the studio to secure your preferred time.
+  </p>
+
+  <div class="footer">
+    <p class="footer-name">Revive Aesthetics</p>
+    <p class="footer-sub">@reviveaesthetics.adl &nbsp;·&nbsp; ADL &nbsp;·&nbsp; ESTD 2026 &nbsp;·&nbsp; STEFANI</p>
+  </div>
+
+</div>
+</body>
+</html>
