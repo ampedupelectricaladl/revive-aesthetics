@@ -175,17 +175,42 @@ function bookingDetailsHtml(b) {
   </table>`;
 }
 
-function confirmationEmail(b, cancelUrl, intakeUrl) {
-  const intakeBlock = intakeUrl ? `
+function confirmationEmail(b, cancelUrl, forms) {
+  forms = forms || {};
+  let formsBlock = '';
+  if (forms.prep && forms.form) {
+    formsBlock = `
+    <p style="line-height:1.7;margin:22px 0 14px;">Before your visit, please read your prep guide and complete your pre-treatment form:</p>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+      <tr>
+        <td style="width:50%;padding-right:6px;text-align:center;vertical-align:top;">
+          <a href="${forms.prep}" style="display:block;background:#c2a878;color:#2B0F1A;text-decoration:none;padding:13px 10px;letter-spacing:1px;text-transform:uppercase;font-size:11px;font-weight:500;">Prep Guide</a>
+          <p style="font-size:11px;color:#6f5b58;margin-top:4px;">What to do before you arrive</p>
+        </td>
+        <td style="width:50%;padding-left:6px;text-align:center;vertical-align:top;">
+          <a href="${forms.form}" style="display:block;background:#2B0F1A;color:#F2E7CE;text-decoration:none;padding:13px 10px;letter-spacing:1px;text-transform:uppercase;font-size:11px;">Pre-Treatment Form</a>
+          <p style="font-size:11px;color:#6f5b58;margin-top:4px;">Health &amp; consent · takes 2 min</p>
+        </td>
+      </tr>
+    </table>`;
+  } else if (forms.prep) {
+    formsBlock = `
+    <p style="line-height:1.7;margin:22px 0 12px;">Please read your prep guide before your visit — it has everything you need to know:</p>
+    <p style="text-align:center;margin:0 0 8px;">
+      <a href="${forms.prep}" style="display:inline-block;background:#2B0F1A;color:#F2E7CE;text-decoration:none;padding:13px 30px;letter-spacing:2px;text-transform:uppercase;font-size:12px;">View Prep Guide</a>
+    </p>`;
+  } else if (forms.form) {
+    formsBlock = `
     <p style="line-height:1.7;margin:22px 0 12px;">One quick thing before your visit — please complete your short pre-treatment form so Stefani can tailor your treatment safely:</p>
     <p style="text-align:center;margin:0 0 8px;">
-      <a href="${intakeUrl}" style="display:inline-block;background:#2B0F1A;color:#F2E7CE;text-decoration:none;padding:13px 30px;letter-spacing:2px;text-transform:uppercase;font-size:12px;">Complete pre-treatment form</a>
+      <a href="${forms.form}" style="display:inline-block;background:#2B0F1A;color:#F2E7CE;text-decoration:none;padding:13px 30px;letter-spacing:2px;text-transform:uppercase;font-size:12px;">Complete pre-treatment form</a>
     </p>
-    <p style="line-height:1.6;font-size:12px;color:#6f5b58;text-align:center;">Takes about 2 minutes · kept completely private</p>` : '';
+    <p style="line-height:1.6;font-size:12px;color:#6f5b58;text-align:center;">Takes about 2 minutes · kept completely private</p>`;
+  }
   return emailShell(`You're booked in, ${b.name.split(' ')[0]}`,
     `<p style="line-height:1.7;margin:0;">${b.intro || 'Thank you for booking with Revive Aesthetics — here are your appointment details:'}</p>
     ${bookingDetailsHtml(b)}
-    ${intakeBlock}
+    ${formsBlock}
     <p style="line-height:1.7;font-size:14px;color:#6f5b58;">Need to change or cancel? No stress —
     <a href="${cancelUrl}" style="color:#2B0F1A;">manage your booking here</a> or call Stefani on
     <a href="tel:0404967051" style="color:#2B0F1A;">0404 967 051</a>.</p>
@@ -219,6 +244,25 @@ function isoToAdelaideAbs(iso) {
 }
 
 const CANCEL_BASE = 'https://reviveaestheticsadl.com.au/book.html';
+const SITE = 'https://reviveaestheticsadl.com.au';
+
+const PREP_FORMS = {
+  'lash-lift':       { prep: 'lash-prep.html',          form: null },
+  'lash-lift-intro': { prep: 'lash-prep.html',          form: null },
+  'microneedling':   { prep: 'microneedling-prep.html', form: 'pdrn-consent.html' },
+  'lymphatic':       { prep: 'lymphatic-prep.html',     form: 'body-consent.html' },
+  'lymphatic-intro': { prep: 'lymphatic-prep.html',     form: 'body-consent.html' },
+  'consultation':    { prep: null,                       form: 'skin-consult-prep.html' },
+};
+
+function treatmentForms(treatmentId, bookingId, name, phone, email) {
+  const t = PREP_FORMS[treatmentId] || {};
+  const qs = `?booking=${encodeURIComponent(bookingId)}&name=${encodeURIComponent(name)}&phone=${encodeURIComponent(phone)}&email=${encodeURIComponent(email)}`;
+  return {
+    prep: t.prep ? `${SITE}/${t.prep}` : null,
+    form: t.form ? `${SITE}/${t.form}${qs}` : null,
+  };
+}
 
 async function sendReminders(env) {
   const db = env.DB;
@@ -386,7 +430,7 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       ),
       sendEmail(env, email, `Booking confirmed: ${what}, ${fmtDate(b.date)} ${fmtTime(startMin)} — Revive Aesthetics`,
         confirmationEmail({ name, what, dateLabel: fmtDate(b.date), timeLabel: fmtTime(startMin), duration, price }, cancelUrl,
-          `https://reviveaestheticsadl.com.au/intake.html?booking=${id}&name=${encodeURIComponent(name)}&phone=${encodeURIComponent(phone)}&email=${encodeURIComponent(email)}`)),
+          treatmentForms(t.id, id, name, phone, email))),
     ]));
 
     return json({
@@ -524,6 +568,16 @@ async function handlePublic(req, env, ctx, url, path, cors) {
         health: ['pregnant', 'breastfeeding', 'face_surgery', 'injectables', 'coldsores',
                  'clotting', 'skin_area', 'photosensitive'],
       },
+      'pdrn-microneedling': {
+        label: 'PDRN Microneedling',
+        health: ['pregnant', 'breastfeeding', 'roaccutane', 'fish_allergy', 'clotting',
+                 'active_skin', 'recent_treatment', 'injectables', 'keloid', 'autoimmune', 'chemo'],
+      },
+      'korean-lash-lift': {
+        label: 'Korean Lash Lift',
+        health: ['pregnant', 'eye_infection', 'eye_surgery', 'chemical_allergy',
+                 'lash_condition', 'alopecia', 'chemo', 'contacts', 'recent_lift'],
+      },
     };
     const formType = CONSENT_FORMS[body.form] ? body.form : 'body-sculpt';
     const HEALTH = CONSENT_FORMS[formType].health;
@@ -598,6 +652,76 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     return json({ ok: true, id }, 200, cors);
   }
 
+  // ---- Instagram / Messenger webhook ----
+
+  // GET: Meta sends this to verify our endpoint when you first add the webhook
+  if (path === '/api/webhooks/instagram' && req.method === 'GET') {
+    const mode      = url.searchParams.get('hub.mode');
+    const token     = url.searchParams.get('hub.verify_token');
+    const challenge = url.searchParams.get('hub.challenge');
+    if (mode === 'subscribe' && token === env.META_VERIFY_TOKEN) {
+      return new Response(challenge, { status: 200 });
+    }
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  // POST: real DM event arrives here
+  if (path === '/api/webhooks/instagram' && req.method === 'POST') {
+    const rawBody = await req.text();
+
+    // Verify Meta signature so random internet people can't fake events
+    if (env.META_APP_SECRET) {
+      const sigHeader = req.headers.get('x-hub-signature-256') || '';
+      const key = await crypto.subtle.importKey(
+        'raw', new TextEncoder().encode(env.META_APP_SECRET),
+        { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+      );
+      const sig  = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(rawBody));
+      const expected = 'sha256=' + Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
+      if (sigHeader !== expected) return new Response('Forbidden', { status: 403 });
+    }
+
+    let body;
+    try { body = JSON.parse(rawBody); } catch { return new Response('EVENT_RECEIVED', { status: 200 }); }
+
+    const autoReply = env.IG_AUTO_REPLY ||
+      "Hi! Thanks for messaging Revive Aesthetics 🌿 Stefani will get back to you soon. To book online: reviveaestheticsadl.com.au 💛";
+
+    // Meta sends entry.messaging[] for both Instagram and Messenger via connected Facebook Page
+    for (const entry of (body.entry || [])) {
+      for (const messaging of (entry.messaging || [])) {
+        const senderId   = messaging.sender?.id;
+        const msgText    = messaging.message?.text;
+        const isEcho     = messaging.message?.is_echo;
+        if (isEcho || !senderId || !msgText) continue;
+
+        // Telegram ping to Stefani
+        ctx.waitUntil(telegram(env,
+          `\u{1F4E9} <b>Instagram DM</b>\n\n"${msgText}"\n\n<i>Auto-reply sent. Reply on Instagram to continue the chat.</i>`
+        ));
+
+        // Auto-reply via Instagram Graph API
+        if (env.META_PAGE_ACCESS_TOKEN) {
+          ctx.waitUntil(
+            fetch('https://graph.instagram.com/v21.0/me/messages', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${env.META_PAGE_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                recipient: { id: senderId },
+                message:   { text: autoReply },
+              }),
+            }).catch(() => {})
+          );
+        }
+      }
+    }
+
+    return new Response('EVENT_RECEIVED', { status: 200 });
+  }
+
   return json({ error: 'not_found' }, 404, cors);
 }
 
@@ -635,14 +759,16 @@ async function handleAdmin(req, env, url, path, cors) {
     const to = isDateStr(url.searchParams.get('to')) ? url.searchParams.get('to') : addDays(from, 30);
     const { results } = await db.prepare(
       `SELECT b.id, b.date, b.start_min, b.end_min, b.status, b.name, b.phone, b.email, b.notes,
-              b.created_at, b.addon_ids, t.name AS treatment, t.price_aud, b.addon_names AS addon
+              b.created_at, b.addon_ids, t.name AS treatment, t.price_aud, b.addon_names AS addon,
+              b.price_override
        FROM bookings b JOIN treatments t ON t.id = b.treatment_id
        WHERE b.date BETWEEN ? AND ? ORDER BY b.date, b.start_min`
     ).bind(from, to).all();
     const priceOf = await makePriceOf(db);
     return json({
       bookings: results.map(r => ({
-        ...r, addon_ids: undefined, price_aud: priceOf(r),
+        ...r, addon_ids: undefined, price_override: undefined,
+        price_aud: Number.isFinite(r.price_override) ? r.price_override : priceOf(r),
         time_label: fmtTime(r.start_min), date_label: fmtDate(r.date),
       })),
     }, 200, cors);
@@ -781,7 +907,7 @@ async function handleAdmin(req, env, url, path, cors) {
         duration: row.end_min - row.start_min, price,
         intro: typeof b.intro === 'string' ? b.intro.slice(0, 500) : '',
       }, cancelUrl,
-      `https://reviveaestheticsadl.com.au/intake.html?booking=${row.id}&name=${encodeURIComponent(row.name)}&phone=${encodeURIComponent(row.phone)}&email=${encodeURIComponent(row.email)}`));
+      treatmentForms(row.treatment_id, row.id, row.name, row.phone, row.email)));
     return json({ ok: !!sent, sent_to: row.email }, 200, cors);
   }
 

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Skin Consultation Pre-Form | Revive Aesthetics — Adelaide</title>
+<meta name="description" content="Complete your short skin consultation form before your appointment at Revive Aesthetics, Adelaide." />
+<meta name="theme-color" content="#2B0F1A" />
+<meta name="robots" content="noindex, nofollow" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --plum: #2B0F1A; --plum-soft: #3c1726; --cream: #F2E7CE; --cream-bg: #f7f0df;
+    --cream-card: #fbf6ea; --gold: #c2a878; --rose: #b58a90; --ink: #2b0f1a; --muted: #6f5b58;
+    --maxw: 760px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Jost', system-ui, sans-serif; color: var(--ink);
+    background: var(--cream-bg); line-height: 1.7; font-weight: 300;
+    -webkit-font-smoothing: antialiased; min-height: 100vh; display: flex; flex-direction: column;
+  }
+  h1, h2, h3 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; line-height: 1.1; }
+  a { color: inherit; }
+  img { max-width: 100%; display: block; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; width: 100%; }
+  .eyebrow { font-size: 0.72rem; letter-spacing: 0.32em; text-transform: uppercase; font-weight: 400; color: var(--rose); margin-bottom: 12px; }
+
+  header.nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(43,15,26,0.96); backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(242,231,206,0.14);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+  .brand-logo { height: 36px; width: auto; }
+  .monogram { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 1.6rem; color: var(--cream); }
+  .nav-back { color: var(--cream); font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.82; }
+
+  .page-head { background: var(--plum); color: var(--cream); text-align: center; padding: 56px 0 50px; }
+  .page-head h1 { font-size: clamp(2rem, 6vw, 3rem); }
+  .page-head h1 em { font-style: italic; color: var(--gold); }
+  .page-head p { color: rgba(242,231,206,0.78); margin-top: 14px; font-size: 0.96rem; max-width: 520px; margin-left: auto; margin-right: auto; }
+
+  main { flex: 1; padding: 40px 0 90px; }
+
+  .intro {
+    background: var(--cream-card); border: 1px solid rgba(43,15,26,0.1); border-left: 3px solid var(--gold);
+    padding: 18px 22px; margin-bottom: 34px; font-size: 0.92rem; color: var(--muted);
+  }
+
+  .sec { margin-bottom: 42px; }
+  .sec > .eyebrow { color: var(--gold); }
+  .sec h2 { font-size: 1.55rem; margin-bottom: 6px; }
+  .sec .hint { color: var(--muted); font-size: 0.88rem; margin-bottom: 22px; }
+
+  .field { display: grid; gap: 6px; margin-bottom: 18px; }
+  label.lbl, .q-label { font-size: 0.9rem; color: var(--ink); font-weight: 400; }
+  .field .sub { font-size: 0.78rem; color: var(--muted); }
+  input[type=text], input[type=tel], input[type=email], textarea, select {
+    font-family: 'Jost', sans-serif; font-size: 0.98rem; padding: 12px 14px;
+    border: 1px solid rgba(43,15,26,0.18); background: #fff; color: var(--ink); border-radius: 0; width: 100%;
+  }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--plum); }
+  textarea { resize: vertical; min-height: 80px; }
+
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 16px; margin-top: 6px; }
+  .opt {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border: 1px solid rgba(43,15,26,0.14); background: #fff; cursor: pointer; font-size: 0.92rem; transition: all .15s;
+  }
+  .opt:hover { border-color: var(--gold); }
+  .opt input { accent-color: var(--plum); width: 16px; height: 16px; }
+  .opt.checked { border-color: var(--plum); background: var(--cream-card); }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 520px) { .two-col { grid-template-columns: 1fr; } }
+
+  .consent { background: var(--cream-card); border: 1px solid rgba(43,15,26,0.1); padding: 22px 24px; }
+  .consent .opt { border: none; background: none; padding: 8px 0; align-items: flex-start; }
+  .consent .opt:hover { border: none; }
+  .consent .opt input { margin-top: 3px; }
+
+  .btn {
+    display: inline-block; font-family: 'Jost', sans-serif; font-weight: 400;
+    letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.74rem;
+    padding: 15px 40px; border: 1px solid var(--plum); cursor: pointer;
+    transition: all .25s ease; background: var(--plum); color: var(--cream);
+  }
+  .btn:hover { background: transparent; color: var(--plum); }
+  .btn[disabled] { opacity: .45; pointer-events: none; }
+
+  .submit-row { margin-top: 30px; text-align: center; }
+  .msg { text-align: center; padding: 12px; font-size: 0.9rem; }
+  .msg.err { color: #8c2f39; }
+
+  .done-card { background: var(--cream-card); border: 1px solid var(--gold); text-align: center; padding: 56px 34px; display: none; }
+  .done-card.show { display: block; }
+  .done-card .tick { width: 54px; height: 54px; margin: 0 auto 20px; color: var(--gold); }
+  .done-card h2 { font-size: 2rem; margin-bottom: 10px; }
+  .done-card p { color: var(--muted); font-size: 0.96rem; max-width: 440px; margin: 0 auto 8px; }
+
+  footer.site { background: var(--plum); color: var(--cream); text-align: center; padding: 40px 0 34px; border-top: 1px solid rgba(242,231,206,0.12); }
+  footer.site .copy { font-size: 0.72rem; color: rgba(242,231,206,0.5); letter-spacing: 0.04em; }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <a href="index.html" style="display:flex;align-items:center;gap:12px;">
+      <img src="assets/logo-mark-cream.png" alt="Revive Aesthetics" class="brand-logo"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='inline';" />
+      <span class="monogram" style="display:none;">RA</span>
+    </a>
+    <span class="nav-back">Revive Aesthetics</span>
+  </div>
+</header>
+
+<div class="page-head">
+  <div class="wrap">
+    <p class="eyebrow" style="color:var(--gold);">Before your visit</p>
+    <h1>Skin <em>Consultation</em> Form</h1>
+    <p>Takes around 3 minutes — helps Stefani understand your skin before you arrive so your consultation is tailored from the very first moment.</p>
+  </div>
+</div>
+
+<main>
+  <div class="wrap">
+
+    <div class="intro" id="form-intro">
+      Everything you share is completely private and only seen by Stefani. There are no wrong answers — the more context you give, the more personalised your consultation will be.
+    </div>
+
+    <form id="consult-form" autocomplete="on">
+
+      <!-- 1. You -->
+      <div class="sec">
+        <p class="eyebrow">Section 1</p>
+        <h2>About you</h2>
+        <div class="two-col">
+          <div class="field">
+            <label class="lbl" for="f-name">Full name</label>
+            <input type="text" id="f-name" placeholder="Your name" autocomplete="name" required />
+          </div>
+          <div class="field">
+            <label class="lbl" for="f-dob">Date of birth <span class="sub">(optional)</span></label>
+            <input type="text" id="f-dob" placeholder="DD/MM/YYYY" />
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="field">
+            <label class="lbl" for="f-phone">Phone</label>
+            <input type="tel" id="f-phone" placeholder="04xx xxx xxx" autocomplete="tel" required />
+          </div>
+          <div class="field">
+            <label class="lbl" for="f-email">Email</label>
+            <input type="email" id="f-email" placeholder="you@example.com" autocomplete="email" required />
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Your skin -->
+      <div class="sec">
+        <p class="eyebrow">Section 2</p>
+        <h2>Your skin</h2>
+
+        <div class="field">
+          <label class="lbl" for="f-skin">How would you describe your skin type?</label>
+          <select id="f-skin">
+            <option value="">Please choose…</option>
+            <option value="Oily">Oily — shiny by midday, prone to breakouts</option>
+            <option value="Dry">Dry — feels tight, can be flaky</option>
+            <option value="Combination">Combination — oily T-zone, drier cheeks</option>
+            <option value="Sensitive">Sensitive — reacts easily, prone to redness</option>
+            <option value="Normal">Normal — generally balanced</option>
+            <option value="Unsure">Not sure</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label class="lbl">What are your main skin concerns? <span class="sub">(tick all that apply)</span></label>
+          <div class="opts" data-group="concerns">
+            <label class="opt"><input type="checkbox" value="Acne / breakouts">Acne / breakouts</label>
+            <label class="opt"><input type="checkbox" value="Pigmentation / dark spots">Pigmentation / dark spots</label>
+            <label class="opt"><input type="checkbox" value="Fine lines / wrinkles">Fine lines / wrinkles</label>
+            <label class="opt"><input type="checkbox" value="Redness / rosacea">Redness / rosacea</label>
+            <label class="opt"><input type="checkbox" value="Dullness / uneven texture">Dullness / uneven texture</label>
+            <label class="opt"><input type="checkbox" value="Enlarged pores">Enlarged pores</label>
+            <label class="opt"><input type="checkbox" value="Scarring">Scarring</label>
+            <label class="opt"><input type="checkbox" value="Dehydration">Dehydration</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="lbl" for="f-goals">What would you most like to achieve from this consultation?</label>
+          <textarea id="f-goals" rows="3" placeholder="e.g. I want to understand what's causing my breakouts and build a proper routine…"></textarea>
+        </div>
+      </div>
+
+      <!-- 3. Current routine -->
+      <div class="sec">
+        <p class="eyebrow">Section 3</p>
+        <h2>Your current routine</h2>
+        <p class="hint">No judgement here — even if your routine is minimal, it's helpful to know what you're currently using.</p>
+
+        <div class="field">
+          <label class="lbl" for="f-am">Morning routine <span class="sub">(products and order, or "basic" if you keep it simple)</span></label>
+          <textarea id="f-am" placeholder="e.g. gentle cleanser, vitamin C serum, SPF 50…"></textarea>
+        </div>
+        <div class="field">
+          <label class="lbl" for="f-pm">Evening routine <span class="sub">(optional)</span></label>
+          <textarea id="f-pm" placeholder="e.g. double cleanse, retinol 2x a week, moisturiser…"></textarea>
+        </div>
+        <div class="field">
+          <label class="lbl" for="f-actives">Any active ingredients you use? <span class="sub">(retinol, AHAs, BHAs, vitamin C, niacinamide — optional)</span></label>
+          <input type="text" id="f-actives" placeholder="e.g. 0.025% tretinoin, CeraVe SA cleanser, Azelaic Acid 10%" />
+        </div>
+      </div>
+
+      <!-- 4. Skin history -->
+      <div class="sec">
+        <p class="eyebrow">Section 4</p>
+        <h2>A little background</h2>
+
+        <div class="field">
+          <label class="lbl" for="f-prev">Previous professional skin treatments <span class="sub">(optional — e.g. facials, peels, microneedling, lasers, injectables)</span></label>
+          <textarea id="f-prev" placeholder="e.g. chemical peels 2 years ago, regular facials…"></textarea>
+        </div>
+        <div class="field">
+          <label class="lbl" for="f-reaction">Any reactions to skincare products or treatments in the past? <span class="sub">(optional)</span></label>
+          <textarea id="f-reaction" placeholder="e.g. broke out badly after a salicylic acid serum…"></textarea>
+        </div>
+      </div>
+
+      <!-- 5. Health notes -->
+      <div class="sec">
+        <p class="eyebrow">Section 5</p>
+        <h2>Health notes</h2>
+        <p class="hint">These help Stefani recommend treatments that are safe and right for you.</p>
+
+        <div class="field">
+          <label class="lbl" for="f-allergies">Known allergies or skin sensitivities <span class="sub">(skincare ingredients, fragrances, metals, or anything else)</span></label>
+          <textarea id="f-allergies" placeholder="e.g. fragrance allergy, sensitive to acids, or 'none'…" style="min-height:60px;"></textarea>
+        </div>
+        <div class="field">
+          <label class="lbl" for="f-meds">Current medications or supplements <span class="sub">(optional — especially anything affecting the skin, e.g. Roaccutane, steroids, antibiotics)</span></label>
+          <textarea id="f-meds" placeholder="Anything relevant, or leave blank…" style="min-height:60px;"></textarea>
+        </div>
+        <div class="field">
+          <label class="lbl" for="f-notes">Anything else Stefani should know before your consultation? <span class="sub">(optional)</span></label>
+          <textarea id="f-notes" placeholder="e.g. pregnant, recent health changes, a specific event you're preparing for…" style="min-height:60px;"></textarea>
+        </div>
+      </div>
+
+      <!-- 6. Consent -->
+      <div class="sec">
+        <p class="eyebrow">Section 6</p>
+        <h2>Just before you go</h2>
+        <div class="consent">
+          <label class="opt"><input type="checkbox" id="c-accurate"><span>The information above is accurate to the best of my knowledge, and I'll let Stefani know if anything changes before my appointment.</span></label>
+          <label class="opt"><input type="checkbox" id="c-course"><span>I understand that skin improvement is a journey — Stefani will give me realistic, honest expectations during our consultation.</span></label>
+          <label class="opt"><input type="checkbox" id="c-aftercare"><span>I'm happy for Stefani to take notes during our consultation to personalise my treatment plan.</span></label>
+
+          <div class="field" style="margin-top:18px;">
+            <label class="lbl" for="f-sign">Type your full name to confirm</label>
+            <input type="text" id="f-sign" placeholder="Your full name" autocomplete="name" />
+          </div>
+        </div>
+      </div>
+
+      <!-- honeypot -->
+      <div style="position:absolute;left:-9999px;" aria-hidden="true"><label>Website</label><input type="text" id="f-website" tabindex="-1" autocomplete="off" /></div>
+
+      <div class="msg err" id="form-msg"></div>
+      <div class="submit-row"><button type="submit" class="btn" id="submit-btn">Send to Stefani</button></div>
+    </form>
+
+    <div class="done-card" id="done-card">
+      <svg class="tick" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="24" cy="24" r="21"/><path d="M15 24.5l6.5 6.5L33 18"/>
+      </svg>
+      <h2>All done</h2>
+      <p id="done-msg">Your form is with Stefani — she'll be prepared and ready for you. See you soon!</p>
+      <p style="margin-top:18px;font-size:0.84rem;color:var(--muted);">Questions before your visit? Call or text Stefani on <a href="tel:0404967051" style="color:var(--plum);">0404 967 051</a>.</p>
+    </div>
+
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <p style="font-size:0.84rem;margin-bottom:8px;">Revive Aesthetics · Adelaide Skin Studio</p>
+    <p><a href="tel:0404967051" style="color:var(--gold);text-decoration:none;">0404 967 051</a></p>
+    <p class="copy" style="margin-top:16px;">&copy; <span id="yr"></span> Revive Aesthetics. All rights reserved.</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var API = 'https://revive-booking.ampedup.workers.dev';
+
+  function $(id) { return document.getElementById(id); }
+  $('yr').textContent = new Date().getFullYear();
+
+  var qs = new URLSearchParams(location.search);
+  if (qs.get('name'))  $('f-name').value  = qs.get('name');
+  if (qs.get('phone')) $('f-phone').value = qs.get('phone');
+  if (qs.get('email')) $('f-email').value = qs.get('email');
+  var bookingId = qs.get('booking') || '';
+
+  document.querySelectorAll('.opt input[type=checkbox]').forEach(function (cb) {
+    cb.addEventListener('change', function () { cb.closest('.opt').classList.toggle('checked', cb.checked); });
+  });
+
+  function group(name) {
+    return Array.prototype.map.call(
+      document.querySelectorAll('[data-group="' + name + '"] input:checked'),
+      function (i) { return i.value; }
+    );
+  }
+
+  $('consult-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = $('form-msg'); msg.textContent = '';
+    var name  = $('f-name').value.trim();
+    var phone = $('f-phone').value.trim();
+    var email = $('f-email').value.trim();
+    var sign  = $('f-sign').value.trim();
+
+    if (name.length < 2) return fail('Please enter your full name.');
+    if (phone.replace(/\D/g, '').length < 8) return fail('Please enter a valid phone number.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Please enter a valid email.');
+    if (!$('c-accurate').checked || !$('c-course').checked || !$('c-aftercare').checked) return fail('Please tick all three boxes to continue.');
+    if (sign.length < 2) return fail('Please type your name to confirm.');
+
+    var routine = [$('f-am').value, $('f-pm').value, $('f-actives').value].filter(Boolean).join(' | PM: ');
+
+    var body = {
+      booking_id: bookingId,
+      name: name, phone: phone, email: email,
+      concerns: group('concerns'),
+      skin_type: $('f-skin').value,
+      fitzpatrick: '',
+      routine: ($('f-am').value ? 'AM: ' + $('f-am').value : '') +
+               ($('f-pm').value ? ' | PM: ' + $('f-pm').value : '') +
+               ($('f-actives').value ? ' | Actives: ' + $('f-actives').value : ''),
+      meds: $('f-meds').value,
+      allergies: $('f-allergies').value,
+      recent_tx: [],
+      prior_reaction: $('f-reaction').value,
+      goals: $('f-goals').value,
+      prev_treatments: $('f-prev').value,
+      extra_notes: $('f-notes').value,
+      pregnant: '', accutane: '', retinoids: '', keloid: '', coldsores: '', infection: '', healing: '', sun: '',
+      consent_accurate: true, consent_course: true, consent_aftercare: true,
+      photo_consent: 'no', signature: sign,
+      website: $('f-website').value,
+      form_type: 'skin-consultation',
+    };
+
+    var btn = $('submit-btn'); btn.disabled = true; btn.textContent = 'Sending…';
+    fetch(API + '/api/intake', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, data: j }; }); })
+    .then(function (r) {
+      if (!r.ok) {
+        btn.disabled = false; btn.textContent = 'Send to Stefani';
+        return fail('Something went wrong — please try again or call Stefani on 0404 967 051.');
+      }
+      $('consult-form').style.display = 'none';
+      $('form-intro').style.display = 'none';
+      $('done-card').classList.add('show');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    })
+    .catch(function () {
+      btn.disabled = false; btn.textContent = 'Send to Stefani';
+      fail('Connection problem — please try again or call 0404 967 051.');
+    });
+
+    function fail(t) { msg.textContent = t; msg.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  });
+}());
+</script>
+
+</body>
+</html>
