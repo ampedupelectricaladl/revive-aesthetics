@@ -19,14 +19,18 @@
  *   GET  /api/admin/blocked
  *   POST /api/admin/block   {date,reason}
  *   POST /api/admin/unblock {date}
+ *   POST /api/admin/book    {date,start_min,end_min,name?,notes?}  (silent — no email/Telegram)
  *   POST /api/admin/cancel  {id}
  *   POST /api/admin/send-confirmation {id, price_override?, intro?}  (re/send booking email, e.g. manual bookings)
+ *   POST /api/admin/set-allowed-slots {date,slots:[start_min,...]}  (pin exact public slots for a date)
+ *   POST /api/admin/clear-allowed-slots {date}  (restore normal availability for a date)
+ *   POST /api/admin/migrate  (idempotent: create any missing tables)
  */
 
 const TZ = 'Australia/Adelaide';
 const OPEN_DAYS = [1, 2];        // Mon, Tue
-const OPEN_MIN = 9 * 60;         // 9:00am
-const CLOSE_MIN = 21 * 60;       // 9:00pm
+const OPEN_MIN = 10 * 60;        // 10:00am
+const CLOSE_MIN = 20 * 60;       // 8:00pm
 const GRID_MIN = 30;             // slot start times every 30 min
 const BUFFER_MIN = 15;           // turnover between clients
 const MIN_NOTICE_MIN = 12 * 60;  // bookings need 12h notice
@@ -90,9 +94,20 @@ async function slotsForDate(db, dateStr, durationMin, nowAbs) {
   const { results: taken } = await db.prepare(
     "SELECT start_min, end_min FROM bookings WHERE date = ? AND status = 'confirmed'"
   ).bind(dateStr).all();
+
+  // Slot overrides: if any rows exist for this date, only those start_min values are candidates.
+  let allowedSet = null;
+  try {
+    const { results: overrides } = await db.prepare(
+      'SELECT start_min FROM slot_overrides WHERE date = ?'
+    ).bind(dateStr).all();
+    if (overrides.length > 0) allowedSet = new Set(overrides.map(o => o.start_min));
+  } catch (_) { /* table not yet migrated — treat as no overrides */ }
+
   const slots = [];
   for (let t = OPEN_MIN; t + durationMin <= CLOSE_MIN; t += GRID_MIN) {
     if (absMin(dateStr, t) < nowAbs + MIN_NOTICE_MIN) continue;
+    if (allowedSet && !allowedSet.has(t)) continue;
     const clash = taken.some(b => t < b.end_min + BUFFER_MIN && b.start_min < t + durationMin + BUFFER_MIN);
     if (!clash) slots.push(t);
   }
@@ -247,8 +262,8 @@ const CANCEL_BASE = 'https://reviveaestheticsadl.com.au/book.html';
 const SITE = 'https://reviveaestheticsadl.com.au';
 
 const PREP_FORMS = {
-  'lash-lift':       { prep: 'lash-prep.html',          form: null },
-  'lash-lift-intro': { prep: 'lash-prep.html',          form: null },
+  'lash-lift':       { prep: 'lash-prep.html',          form: 'lash-consent.html' },
+  'lash-lift-intro': { prep: 'lash-prep.html',          form: 'lash-consent.html' },
   'microneedling':   { prep: 'microneedling-prep.html', form: 'pdrn-consent.html' },
   'lymphatic':       { prep: 'lymphatic-prep.html',     form: 'body-consent.html' },
   'lymphatic-intro': { prep: 'lymphatic-prep.html',     form: 'body-consent.html' },
@@ -879,6 +894,22 @@ async function handleAdmin(req, env, url, path, cors) {
     return json({ ok: true }, 200, cors);
   }
 
+  // Silent admin booking — no email, no Telegram. Used to block specific slots.
+  if (path === '/api/admin/book' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    if (!isDateStr(b.date)) return json({ error: 'bad_date' }, 400, cors);
+    const start = typeof b.start_min === 'number' ? b.start_min : null;
+    const end = typeof b.end_min === 'number' ? b.end_min : null;
+    if (start === null || end === null || end <= start) return json({ error: 'bad_times' }, 400, cors);
+    const id = crypto.randomUUID();
+    await db.prepare(
+      `INSERT OR IGNORE INTO bookings (id, treatment_id, addon_ids, addon_names, date, start_min, end_min, name, phone, email, notes, status, reminded, cancel_token, created_at)
+       VALUES (?, 'consultation', '', '', ?, ?, ?, ?, '', '', ?, 'confirmed', 0, ?, ?)`
+    ).bind(id, b.date, start, end, String(b.name || 'BLOCKED').slice(0, 100),
+      String(b.notes || 'Admin block').slice(0, 500), crypto.randomUUID(), new Date().toISOString()).run();
+    return json({ ok: true, id }, 200, cors);
+  }
+
   if (path === '/api/admin/cancel' && req.method === 'POST') {
     const b = await req.json().catch(() => ({}));
     await db.prepare("UPDATE bookings SET status='cancelled', cancelled_at=? WHERE id=?")
@@ -909,6 +940,34 @@ async function handleAdmin(req, env, url, path, cors) {
       }, cancelUrl,
       treatmentForms(row.treatment_id, row.id, row.name, row.phone, row.email)));
     return json({ ok: !!sent, sent_to: row.email }, 200, cors);
+  }
+
+  // Pin the exact public slots Stefani wants shown for a date (replaces any previous override).
+  if (path === '/api/admin/set-allowed-slots' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    if (!isDateStr(b.date)) return json({ error: 'bad_date' }, 400, cors);
+    const slots = Array.isArray(b.slots) ? b.slots.filter(s => Number.isInteger(s)) : [];
+    await db.prepare('DELETE FROM slot_overrides WHERE date = ?').bind(b.date).run();
+    for (const s of slots) {
+      await db.prepare('INSERT OR IGNORE INTO slot_overrides (date, start_min) VALUES (?, ?)').bind(b.date, s).run();
+    }
+    return json({ ok: true, date: b.date, slots }, 200, cors);
+  }
+
+  // Restore normal availability for a date (remove any slot override).
+  if (path === '/api/admin/clear-allowed-slots' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    if (!isDateStr(b.date)) return json({ error: 'bad_date' }, 400, cors);
+    await db.prepare('DELETE FROM slot_overrides WHERE date = ?').bind(b.date).run();
+    return json({ ok: true }, 200, cors);
+  }
+
+  // Idempotent schema migration — creates any tables added after the initial deploy.
+  if (path === '/api/admin/migrate' && req.method === 'POST') {
+    await db.prepare(
+      `CREATE TABLE IF NOT EXISTS slot_overrides (date TEXT NOT NULL, start_min INTEGER NOT NULL, PRIMARY KEY (date, start_min))`
+    ).run();
+    return json({ ok: true }, 200, cors);
   }
 
   return json({ error: 'not_found' }, 404, cors);
