@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+<script src="https://js.stripe.com/v3/"></script>
 
 <style>
   :root {
@@ -206,6 +207,8 @@
       <div class="step-dot" data-s="2"><span class="n">2</span><span class="lbl">Time</span></div>
       <div class="step-sep"></div>
       <div class="step-dot" data-s="3"><span class="n">3</span><span class="lbl">Details</span></div>
+      <div class="step-sep"></div>
+      <div class="step-dot" data-s="4"><span class="n">4</span><span class="lbl">Deposit</span></div>
     </div>
 
     <!-- fallback when API not yet live / unreachable -->
@@ -259,9 +262,34 @@
           <textarea id="f-notes" placeholder="Skin concerns, first visit, current products…"></textarea></div>
         <div class="hp"><label>Website</label><input id="f-website" tabindex="-1" autocomplete="off" /></div>
         <div class="msg err" id="book-msg"></div>
-        <button type="submit" class="btn" id="book-btn">Confirm Booking</button>
+        <button type="submit" class="btn" id="book-btn">Continue to Deposit &rarr;</button>
       </form>
       <div class="nav-row"><button class="btn-link" data-back="2">&larr; Change time</button><span></span></div>
+    </div>
+
+    <!-- step 4: deposit -->
+    <div class="panel" id="p-deposit">
+      <h2>Secure your spot</h2>
+      <p class="sub">A $25 deposit is required to confirm your booking. It will be deducted from your total on the day.</p>
+      <div class="summary">
+        <span class="what" id="dep-what"></span>
+        <span class="when" id="dep-when"></span>
+      </div>
+      <div style="background:var(--cream-card);border-radius:12px;padding:24px;margin:20px 0;">
+        <p style="font-family:var(--sans);font-size:14px;color:var(--muted);margin-bottom:14px;letter-spacing:.03em;">DEPOSIT AMOUNT</p>
+        <p style="font-family:'Cormorant Garamond',serif;font-size:32px;color:var(--plum);font-weight:500;">$25.00</p>
+        <p style="font-family:var(--sans);font-size:12px;color:var(--muted);margin-top:4px;">Secure online payment via Stripe</p>
+      </div>
+      <form id="dep-form">
+        <div class="field" style="margin-bottom:18px;">
+          <label for="dep-card-element" style="margin-bottom:8px;">Card details</label>
+          <div id="dep-card-element" style="background:var(--cream-card);border:1px solid rgba(43,15,26,.18);border-radius:8px;padding:14px 12px;"></div>
+          <div id="dep-card-errors" class="msg err" style="margin-top:8px;display:none;"></div>
+        </div>
+        <div class="msg err" id="dep-msg"></div>
+        <button type="submit" class="btn" id="dep-btn">Pay $25 Deposit &amp; Confirm</button>
+      </form>
+      <div class="nav-row"><button class="btn-link" id="dep-back">&larr; Edit details</button><span></span></div>
     </div>
 
     <!-- success -->
@@ -313,7 +341,9 @@
 <script>
 (function () {
   var API = window.REVIVE_API_BASE;
-  var state = { treatment: null, sel: [], addons: [], availability: null, date: null, min: null, timeLabel: '' };
+  var STRIPE_PK = 'pk_live_51TrJ2lFjfVooeQfRTJ5AO02cewfIhzBuNQeKC5yHFdUXQjNgzG6tamTfb3WW8KM0dFKvugq3KTxah6KD2Rxick7H00uOkxYzLA';
+  var state = { treatment: null, sel: [], addons: [], availability: null, date: null, min: null, timeLabel: '',
+                formData: null, stripe: null, cardElement: null };
   function selDur() { return state.sel.reduce(function (s, a) { return s + a.duration_min; }, 0); }
   function selPrice() { return state.sel.reduce(function (s, a) { return s + a.price_aud; }, 0); }
   function selNames() { return state.sel.map(function (a) { return a.name; }).join(' + '); }
@@ -321,7 +351,7 @@
 
   function $(id) { return document.getElementById(id); }
   function show(panelId, step) {
-    ['p-offline','p-treatment','p-time','p-details','p-done','p-cancel'].forEach(function (p) {
+    ['p-offline','p-treatment','p-time','p-details','p-deposit','p-done','p-cancel'].forEach(function (p) {
       $(p).classList.toggle('on', p === panelId);
     });
     document.querySelectorAll('.step-dot').forEach(function (d) {
@@ -481,55 +511,126 @@
     $('time-wrap').style.display = 'block';
   }
 
-  $('book-form').addEventListener('submit', function (e) {
+  // Step 3 submit — store form data and move to deposit step
+  $(‘book-form’).addEventListener(‘submit’, function (e) {
     e.preventDefault();
-    var btn = $('book-btn'); btn.disabled = true; btn.textContent = 'Booking…';
-    $('book-msg').textContent = '';
-    api('/api/book', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        treatment: state.treatment.id, addons: state.sel.map(function (a) { return a.id; }),
-        date: state.date, start_min: state.min,
-        name: $('f-name').value, phone: $('f-phone').value,
-        email: $('f-email').value, notes: $('f-notes').value,
-        website: $('f-website').value,
-      }),
+    $(‘book-msg’).textContent = ‘’;
+    state.formData = {
+      treatment: state.treatment.id, addons: state.sel.map(function (a) { return a.id; }),
+      date: state.date, start_min: state.min,
+      name: $(‘f-name’).value, phone: $(‘f-phone’).value,
+      email: $(‘f-email’).value, notes: $(‘f-notes’).value,
+      website: $(‘f-website’).value,
+    };
+    goToDeposit();
+  });
+
+  function goToDeposit() {
+    var btn = $(‘book-btn’); btn.disabled = true; btn.textContent = ‘Loading…’;
+    var names = selNames();
+    $(‘dep-what’).textContent = state.treatment.name + (names ? ‘ + ‘ + names : ‘’);
+    var f = fmtDateLabel(state.date);
+    $(‘dep-when’).textContent = f.dow + ‘ ‘ + f.day + ‘ · ‘ + state.formData.start_min;
+    // lazy-init Stripe Card Element
+    if (!state.stripe) {
+      state.stripe = Stripe(STRIPE_PK);
+      var elements = state.stripe.elements();
+      state.cardElement = elements.create(‘card’, {
+        style: {
+          base: { fontFamily: ‘Jost, sans-serif’, fontSize: ‘15px’, color: ‘#2B0F1A’,
+                  ‘::placeholder’: { color: ‘#b0a090’ } },
+          invalid: { color: ‘#c0392b’ },
+        },
+        hidePostalCode: true,
+      });
+      state.cardElement.mount(‘#dep-card-element’);
+      state.cardElement.on(‘change’, function (ev) {
+        var el = $(‘dep-card-errors’);
+        if (ev.error) { el.textContent = ev.error.message; el.style.display = ‘block’; }
+        else { el.textContent = ‘’; el.style.display = ‘none’; }
+      });
+    }
+    // Create PaymentIntent on the server
+    api(‘/api/create-payment-intent’, {
+      method: ‘POST’, headers: { ‘content-type’: ‘application/json’ },
+      body: JSON.stringify({ name: state.formData.name }),
     }).then(function (r) {
-      btn.disabled = false; btn.textContent = 'Confirm Booking';
+      btn.disabled = false; btn.textContent = ‘Continue to Deposit →’;
       if (!r.ok) {
-        var errs = {
-          slot_unavailable: 'That time was just taken — please pick another.',
-          too_many_bookings: 'You already have upcoming bookings — call 0404 967 051 to add more.',
-          phone_required: 'Please enter a valid phone number.',
-          name_required: 'Please enter your name.',
-          email_required: 'Please enter your email address.',
-          bad_email: 'That email doesn’t look right.',
-        };
-        $('book-msg').textContent = errs[r.data.error] || 'Something went wrong — please try again or call 0404 967 051.';
-        if (r.data.error === 'slot_unavailable') { show('p-time', 2); loadAvailability(); $('time-msg').textContent = errs.slot_unavailable; }
+        $(‘book-msg’).textContent = ‘Could not start payment — please try again or call 0404 967 051.’;
         return;
       }
-      var b = r.data;
-      $('done-what').textContent = b.treatment + (b.addon ? ' + ' + b.addon : '');
-      $('done-when').textContent = b.date_label + ' · ' + b.time_label;
-      var start = b.date.replace(/-/g, '') + 'T' + String(Math.floor(state.min / 60)).padStart(2, '0') + String(state.min % 60).padStart(2, '0') + '00';
-      var endMin = state.min + b.duration_min;
-      var end = b.date.replace(/-/g, '') + 'T' + String(Math.floor(endMin / 60)).padStart(2, '0') + String(endMin % 60).padStart(2, '0') + '00';
-      var cancelUrl = location.origin + location.pathname + '?cancel=' + b.id + '&token=' + b.cancel_token;
-      $('intake-link').href = 'intake.html?booking=' + encodeURIComponent(b.id) +
-        '&name=' + encodeURIComponent($('f-name').value) +
-        '&phone=' + encodeURIComponent($('f-phone').value) +
-        '&email=' + encodeURIComponent($('f-email').value);
-      $('gcal-link').href = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
-        '&text=' + encodeURIComponent(b.treatment + (b.addon ? ' + ' + b.addon : '') + ' — Revive Aesthetics') +
-        '&dates=' + start + '/' + end + '&ctz=Australia/Adelaide' +
-        '&details=' + encodeURIComponent('Revive Aesthetics, Adelaide\nCancel/change: ' + cancelUrl) +
-        '&location=' + encodeURIComponent('Adelaide SA');
-      $('cancel-link').href = cancelUrl;
-      show('p-done', null);
+      state.clientSecret = r.data.client_secret;
+      // Update dep-when properly now we have the time label
+      var price = state.treatment.price_aud + selPrice();
+      $(‘dep-when’).textContent = f.dow + ‘ ‘ + f.day + ‘ · ‘ + state.timeLabel + (price > 0 ? ‘ · $’ + price : ‘’);
+      show(‘p-deposit’, 4);
     }).catch(function () {
-      btn.disabled = false; btn.textContent = 'Confirm Booking';
-      $('book-msg').textContent = 'Connection problem — please try again.';
+      btn.disabled = false; btn.textContent = ‘Continue to Deposit →’;
+      $(‘book-msg’).textContent = ‘Connection problem — please try again.’;
+    });
+  }
+
+  $(‘dep-back’).addEventListener(‘click’, function () {
+    show(‘p-details’, 3);
+  });
+
+  function showBookingSuccess(b, paymentIntentId) {
+    $(‘done-what’).textContent = b.treatment + (b.addon ? ‘ + ‘ + b.addon : ‘’);
+    $(‘done-when’).textContent = b.date_label + ‘ · ‘ + b.time_label;
+    var start = b.date.replace(/-/g, ‘’) + ‘T’ + String(Math.floor(state.min / 60)).padStart(2, ‘0’) + String(state.min % 60).padStart(2, ‘0’) + ‘00’;
+    var endMin = state.min + b.duration_min;
+    var end = b.date.replace(/-/g, ‘’) + ‘T’ + String(Math.floor(endMin / 60)).padStart(2, ‘0’) + String(endMin % 60).padStart(2, ‘0’) + ‘00’;
+    var cancelUrl = location.origin + location.pathname + ‘?cancel=’ + b.id + ‘&token=’ + b.cancel_token;
+    $(‘intake-link’).href = ‘intake.html?booking=’ + encodeURIComponent(b.id) +
+      ‘&name=’ + encodeURIComponent(state.formData.name) +
+      ‘&phone=’ + encodeURIComponent(state.formData.phone) +
+      ‘&email=’ + encodeURIComponent(state.formData.email);
+    $(‘gcal-link’).href = ‘https://calendar.google.com/calendar/render?action=TEMPLATE’ +
+      ‘&text=’ + encodeURIComponent(b.treatment + (b.addon ? ‘ + ‘ + b.addon : ‘’) + ‘ — Revive Aesthetics’) +
+      ‘&dates=’ + start + ‘/’ + end + ‘&ctz=Australia/Adelaide’ +
+      ‘&details=’ + encodeURIComponent(‘Revive Aesthetics, Adelaide\nCancel/change: ‘ + cancelUrl) +
+      ‘&location=’ + encodeURIComponent(‘Adelaide SA’);
+    $(‘cancel-link’).href = cancelUrl;
+    show(‘p-done’, null);
+  }
+
+  // Step 4: pay deposit then book
+  $(‘dep-form’).addEventListener(‘submit’, function (e) {
+    e.preventDefault();
+    var btn = $(‘dep-btn’); btn.disabled = true; btn.textContent = ‘Processing…’;
+    $(‘dep-msg’).textContent = ‘’;
+    state.stripe.confirmCardPayment(state.clientSecret, {
+      payment_method: { card: state.cardElement },
+    }).then(function (result) {
+      if (result.error) {
+        btn.disabled = false; btn.textContent = ‘Pay $25 Deposit & Confirm’;
+        $(‘dep-msg’).textContent = result.error.message || ‘Payment failed — please try again.’;
+        return;
+      }
+      // Payment succeeded — submit booking
+      var paymentIntentId = result.paymentIntent.id;
+      var body = Object.assign({}, state.formData, { payment_intent_id: paymentIntentId });
+      api(‘/api/book’, {
+        method: ‘POST’, headers: { ‘content-type’: ‘application/json’ },
+        body: JSON.stringify(body),
+      }).then(function (r) {
+        btn.disabled = false; btn.textContent = ‘Pay $25 Deposit & Confirm’;
+        if (!r.ok) {
+          var errs = {
+            slot_unavailable: ‘That time was just taken — your card has not been charged. Please pick another time.’,
+            too_many_bookings: ‘You already have upcoming bookings — call 0404 967 051.’,
+            deposit_unverified: ‘Payment could not be verified — please call 0404 967 051.’,
+          };
+          $(‘dep-msg’).textContent = errs[r.data.error] || ‘Something went wrong — please call 0404 967 051.’;
+          if (r.data.error === ‘slot_unavailable’) { show(‘p-time’, 2); loadAvailability(); }
+          return;
+        }
+        showBookingSuccess(r.data, paymentIntentId);
+      }).catch(function () {
+        btn.disabled = false; btn.textContent = ‘Pay $25 Deposit & Confirm’;
+        $(‘dep-msg’).textContent = ‘Booking could not be confirmed after payment — please call 0404 967 051 immediately.’;
+      });
     });
   });
 })();

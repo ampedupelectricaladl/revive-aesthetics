@@ -5,7 +5,8 @@
  * Public:
  *   GET  /api/treatments
  *   GET  /api/availability?treatment=<id>&from=YYYY-MM-DD&days=N
- *   POST /api/book    {treatment,date,time,name,phone,email,notes}
+ *   POST /api/create-payment-intent  {name?}  → {client_secret}
+ *   POST /api/book    {treatment,date,time,name,phone,email,notes,payment_intent_id}
  *   GET  /api/booking?id=&token=
  *   POST /api/cancel  {id,token}
  *   POST /api/intake  {name,phone,email,booking_id,...answers}
@@ -222,9 +223,13 @@ function confirmationEmail(b, cancelUrl, forms) {
     </p>
     <p style="line-height:1.6;font-size:12px;color:#6f5b58;text-align:center;">Takes about 2 minutes · kept completely private</p>`;
   }
+  const depositNote = b.deposit
+    ? `<p style="line-height:1.7;font-size:13px;background:#f9f4ec;border-left:3px solid #c2a878;padding:10px 14px;margin:16px 0 0;">💳 Your $25 deposit has been received and will be deducted from your total on the day.</p>`
+    : '';
   return emailShell(`You're booked in, ${b.name.split(' ')[0]}`,
     `<p style="line-height:1.7;margin:0;">${b.intro || 'Thank you for booking with Revive Aesthetics — here are your appointment details:'}</p>
     ${bookingDetailsHtml(b)}
+    ${depositNote}
     ${formsBlock}
     <p style="line-height:1.7;font-size:14px;color:#6f5b58;">Need to change or cancel? No stress —
     <a href="${cancelUrl}" style="color:#2B0F1A;">manage your booking here</a> or call Stefani on
@@ -260,6 +265,7 @@ function isoToAdelaideAbs(iso) {
 
 const CANCEL_BASE = 'https://reviveaestheticsadl.com.au/book.html';
 const SITE = 'https://reviveaestheticsadl.com.au';
+const DEPOSIT_CENTS = 2500; // $25.00 AUD
 
 const PREP_FORMS = {
   'lash-lift':       { prep: 'lash-prep.html',          form: 'lash-consent.html' },
@@ -387,6 +393,28 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     return json({ treatment: t.id, duration_min: duration, dates }, 200, cors);
   }
 
+  if (path === '/api/create-payment-intent' && req.method === 'POST') {
+    if (!env.STRIPE_SECRET_KEY) return json({ error: 'payments_unavailable' }, 503, cors);
+    const body = await req.json().catch(() => ({}));
+    const name = String(body.name || '').trim().slice(0, 120);
+    const params = new URLSearchParams();
+    params.set('amount', String(DEPOSIT_CENTS));
+    params.set('currency', 'aud');
+    params.append('payment_method_types[]', 'card');
+    if (name) params.set('description', `Revive Aesthetics booking deposit — ${name}`);
+    const r = await fetch('https://api.stripe.com/v1/payment_intents', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+    const pi = await r.json();
+    if (!r.ok) return json({ error: 'stripe_error', detail: pi.error?.message }, 502, cors);
+    return json({ client_secret: pi.client_secret }, 200, cors);
+  }
+
   if (path === '/api/book' && req.method === 'POST') {
     const b = await req.json().catch(() => ({}));
     if (b.website) return json({ ok: true }, 200, cors); // honeypot: pretend success
@@ -420,14 +448,30 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     ).bind(now.date, phone, email || ' ').first();
     if (dup.n >= 2) return json({ error: 'too_many_bookings' }, 429, cors);
 
+    // Verify Stripe deposit — required when payments are configured
+    let paymentIntentId = '';
+    if (env.STRIPE_SECRET_KEY) {
+      const pid = String(b.payment_intent_id || '').trim();
+      if (!pid) return json({ error: 'deposit_required' }, 402, cors);
+      const sr = await fetch(`https://api.stripe.com/v1/payment_intents/${encodeURIComponent(pid)}`, {
+        headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+      });
+      const pi = await sr.json();
+      if (!sr.ok || pi.status !== 'succeeded' || pi.amount !== DEPOSIT_CENTS || pi.currency !== 'aud') {
+        return json({ error: 'deposit_unverified' }, 402, cors);
+      }
+      paymentIntentId = pid;
+    }
+
     const id = crypto.randomUUID().slice(0, 8);
     const cancelToken = crypto.randomUUID();
     try {
       await db.prepare(
-        `INSERT INTO bookings (id, treatment_id, addon_ids, addon_names, date, start_min, end_min, name, phone, email, notes, cancel_token, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO bookings (id, treatment_id, addon_ids, addon_names, date, start_min, end_min, name, phone, email, notes, cancel_token, created_at, stripe_payment_intent_id, deposit_paid)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(id, t.id, addons.map(a => a.id).join(','), addonNames, b.date, startMin, startMin + duration,
-             name, phone, email, notes, cancelToken, new Date().toISOString()).run();
+             name, phone, email, notes, cancelToken, new Date().toISOString(),
+             paymentIntentId, paymentIntentId ? 1 : 0).run();
     } catch (e) {
       if (String(e.message || e).includes('UNIQUE')) return json({ error: 'slot_unavailable' }, 409, cors);
       throw e;
@@ -441,10 +485,11 @@ async function handlePublic(req, env, ctx, url, path, cors) {
         `${what} — ${fmtDate(b.date)}, ${fmtTime(startMin)} (${duration} min · $${price})\n` +
         `${name} · ${phone}${email ? ' · ' + email : ''}` +
         (notes ? `\nNotes: ${notes}` : '') +
+        (paymentIntentId ? '\n💳 $25 deposit paid' : '') +
         `\nRef ${id}`
       ),
       sendEmail(env, email, `Booking confirmed: ${what}, ${fmtDate(b.date)} ${fmtTime(startMin)} — Revive Aesthetics`,
-        confirmationEmail({ name, what, dateLabel: fmtDate(b.date), timeLabel: fmtTime(startMin), duration, price }, cancelUrl,
+        confirmationEmail({ name, what, dateLabel: fmtDate(b.date), timeLabel: fmtTime(startMin), duration, price, deposit: !!paymentIntentId }, cancelUrl,
           treatmentForms(t.id, id, name, phone, email))),
     ]));
 
@@ -775,7 +820,7 @@ async function handleAdmin(req, env, url, path, cors) {
     const { results } = await db.prepare(
       `SELECT b.id, b.date, b.start_min, b.end_min, b.status, b.name, b.phone, b.email, b.notes,
               b.created_at, b.addon_ids, t.name AS treatment, t.price_aud, b.addon_names AS addon,
-              b.price_override
+              b.price_override, b.deposit_paid
        FROM bookings b JOIN treatments t ON t.id = b.treatment_id
        WHERE b.date BETWEEN ? AND ? ORDER BY b.date, b.start_min`
     ).bind(from, to).all();
@@ -784,6 +829,7 @@ async function handleAdmin(req, env, url, path, cors) {
       bookings: results.map(r => ({
         ...r, addon_ids: undefined, price_override: undefined,
         price_aud: Number.isFinite(r.price_override) ? r.price_override : priceOf(r),
+        deposit_paid: r.deposit_paid === 1,
         time_label: fmtTime(r.start_min), date_label: fmtDate(r.date),
       })),
     }, 200, cors);
@@ -967,6 +1013,9 @@ async function handleAdmin(req, env, url, path, cors) {
     await db.prepare(
       `CREATE TABLE IF NOT EXISTS slot_overrides (date TEXT NOT NULL, start_min INTEGER NOT NULL, PRIMARY KEY (date, start_min))`
     ).run();
+    // Stripe deposit columns — added 2026-08-26; safe to run repeatedly
+    await db.exec(`ALTER TABLE bookings ADD COLUMN stripe_payment_intent_id TEXT`).catch(() => {});
+    await db.exec(`ALTER TABLE bookings ADD COLUMN deposit_paid INTEGER DEFAULT 0`).catch(() => {});
     return json({ ok: true }, 200, cors);
   }
 
