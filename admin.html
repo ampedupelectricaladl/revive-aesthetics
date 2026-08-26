@@ -421,7 +421,7 @@
     if (!TOKEN) { showLock(); return; }
     api('/api/admin/blocked').then(function () {
       showApp(); loadDiary(false); loadClients(); loadTimeOff(); loadSurvey();
-    }).catch(function () {});
+    }).catch(function () { showLock(); });
   }
   boot();
 })();
