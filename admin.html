@@ -157,16 +157,23 @@
   function plusDays(n) { var d = new Date(Date.now() + n * 864e5); return d.toISOString().slice(0, 10); }
 
   // ---------- Diary ----------
-  function loadDiary() {
-    api('/api/admin/bookings?from=' + plusDays(0) + '&to=' + plusDays(62)).then(function (r) {
+  function loadDiary(showPast) {
+    var from = showPast ? plusDays(-365) : plusDays(0);
+    api('/api/admin/bookings?from=' + from + '&to=' + plusDays(62)).then(function (r) {
       var v = $('v-diary');
-      var upcoming = r.bookings.filter(function (b) { return b.status === 'confirmed'; });
-      if (!upcoming.length) { v.innerHTML = '<div class="empty">No upcoming bookings yet.<br>Share the booking link to fill your diary ✨</div>'; return; }
+      var all = r.bookings.filter(function (b) { return b.status === 'confirmed'; });
+      var today = new Date().toISOString().slice(0, 10);
+      var upcoming = showPast ? all : all.filter(function (b) { return b.date >= today; });
+      var past = showPast ? all.filter(function (b) { return b.date < today; }) : [];
+      var toggleBtn = '<div style="text-align:right;margin-bottom:14px;">' +
+        '<button class="btn btn--ghost" id="past-toggle" style="font-size:.68rem;padding:8px 16px;">' +
+        (showPast ? '&#9650; Hide past' : '&#9660; Show past year') + '</button></div>';
+      if (!upcoming.length && !past.length) { v.innerHTML = toggleBtn + '<div class="empty">No upcoming bookings yet.<br>Share the booking link to fill your diary ✨</div>'; wireToggle(v, showPast); return; }
       var byDate = {};
       upcoming.forEach(function (b) { (byDate[b.date] = byDate[b.date] || []).push(b); });
       var revenue = upcoming.reduce(function (s, b) { return s + (b.price_aud || 0); }, 0);
-      var html = '<div class="stat-row">' +
-        '<div class="stat"><div class="n">' + upcoming.length + '</div><div class="l">Bookings</div></div>' +
+      var html = toggleBtn + '<div class="stat-row">' +
+        '<div class="stat"><div class="n">' + upcoming.length + '</div><div class="l">Upcoming</div></div>' +
         '<div class="stat"><div class="n">' + Object.keys(byDate).length + '</div><div class="l">Days</div></div>' +
         '<div class="stat"><div class="n">' + money(revenue) + '</div><div class="l">Booked $</div></div></div>';
       Object.keys(byDate).sort().forEach(function (d) {
@@ -186,57 +193,139 @@
           '</div>';
         });
       });
+      // Past bookings section
+      if (past.length) {
+        var pastByDate = {};
+        past.forEach(function (b) { (pastByDate[b.date] = pastByDate[b.date] || []).push(b); });
+        html += ‘<div class="day-head" style="margin-top:30px;"><span>Past Appointments</span><span class="cnt">’ + past.length + ‘ total</span></div>’;
+        Object.keys(pastByDate).sort().reverse().forEach(function (d) {
+          html += ‘<div class="day-head" style="margin-top:14px;font-size:.65rem;"><span>’ + dayLabel(d) + ‘</span></div>’;
+          pastByDate[d].forEach(function (b) {
+            html += ‘<div class="card" style="opacity:.7;">’ +
+              ‘<div class="bk-row1"><span class="bk-time">’ + b.time_label + ‘</span><span class="bk-price">’ + money(b.price_aud) + ‘</span></div>’ +
+              ‘<div class="bk-what">’ + esc(b.treatment) + (b.addon ? ‘ + ‘ + esc(b.addon) : ‘’) + ‘</div>’ +
+              ‘<div class="bk-name">’ + esc(b.name) + ‘</div>’ +
+              ‘<div class="bk-contact">’ +
+                ‘<a class="pill" href="tel:’ + esc(b.phone) + ‘">&#9742; ‘ + esc(b.phone) + ‘</a>’ +
+                ‘<a class="pill" href="sms:’ + esc(b.phone) + ‘">SMS</a>’ +
+                (b.email ? ‘<a class="pill" href="mailto:’ + esc(b.email) + ‘">’ + esc(b.email) + ‘</a>’ : ‘’) +
+              ‘</div>’ +
+              (b.notes ? ‘<div class="bk-notes">’ + esc(b.notes) + ‘</div>’ : ‘’) +
+            ‘</div>’;
+          });
+        });
+      }
+
       v.innerHTML = html;
-      v.querySelectorAll('.bk-cancel').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          if (!confirm('Cancel ' + btn.dataset.name + '’s booking?')) return;
-          api('/api/admin/cancel', { method: 'POST', body: JSON.stringify({ id: btn.dataset.id }) })
-            .then(function () { loadDiary(); });
+      wireToggle(v, showPast);
+      v.querySelectorAll(‘.bk-cancel’).forEach(function (btn) {
+        btn.addEventListener(‘click’, function () {
+          if (!confirm(‘Cancel ‘ + btn.dataset.name + ‘\’s booking?’)) return;
+          api(‘/api/admin/cancel’, { method: ‘POST’, body: JSON.stringify({ id: btn.dataset.id }) })
+            .then(function () { loadDiary(showPast); });
         });
       });
     }).catch(function () {});
   }
 
+  function wireToggle(v, showPast) {
+    var btn = v.querySelector(‘#past-toggle’);
+    if (btn) btn.addEventListener(‘click’, function () { loadDiary(!showPast); });
+  }
+
   // ---------- Clients ----------
   function loadClients() {
-    api('/api/admin/clients').then(function (r) {
-      var v = $('v-clients');
-      if (!r.clients.length) { v.innerHTML = '<div class="empty">No clients yet — they’ll appear here as bookings come in.</div>'; return; }
-      var html = '<input class="search" id="cl-search" placeholder="Search name, phone, email…" />' +
-        '<div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;">' + r.total + ' client' + (r.total > 1 ? 's' : '') + ' · every booking captures name, phone + email</div>' +
-        '<div id="cl-list"></div>';
+    var v = $(‘v-clients’);
+    // Fetch clients + all bookings (past 2 years to future 3 months) in parallel
+    Promise.all([
+      api(‘/api/admin/clients’),
+      api(‘/api/admin/bookings?from=’ + plusDays(-730) + ‘&to=’ + plusDays(90)),
+    ]).then(function (results) {
+      var r = results[0];
+      var allBk = results[1].bookings || [];
+      if (!r.clients.length) { v.innerHTML = ‘<div class="empty">No clients yet — they\’ll appear here as bookings come in.</div>’; return; }
+
+      // Build per-phone booking index (all statuses)
+      var bkByPhone = {};
+      allBk.forEach(function (b) {
+        var key = String(b.phone || ‘’).replace(/\D/g, ‘’);
+        if (!key) return;
+        (bkByPhone[key] = bkByPhone[key] || []).push(b);
+      });
+
+      var html = ‘<input class="search" id="cl-search" placeholder="Search name, phone, email…" />’ +
+        ‘<div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;">’ + r.total + ‘ client’ + (r.total > 1 ? ‘s’ : ‘’) + ‘ · tap any card to see their booking history</div>’ +
+        ‘<div id="cl-list"></div>’;
       v.innerHTML = html;
+
+      function historyHtml(c) {
+        var key = String(c.phone || ‘’).replace(/\D/g, ‘’);
+        var bks = (bkByPhone[key] || []).slice().sort(function (a, b) { return b.date.localeCompare(a.date); });
+        if (!bks.length) return ‘<div style="font-size:.82rem;color:var(--muted);padding:8px 0;">No booking records found.</div>’;
+        return ‘<div style="margin-top:10px;border-top:1px solid rgba(43,15,26,.1);padding-top:10px;">’ +
+          bks.map(function (b) {
+            var isCancelled = b.status === ‘cancelled’;
+            return ‘<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid rgba(43,15,26,.06);’ + (isCancelled ? ‘opacity:.45;’ : ‘’) + ‘">’ +
+              ‘<div>’ +
+                ‘<span style="font-family:\’Cormorant Garamond\’,serif;font-size:1.05rem;">’ + esc(b.date_label || b.date) + ‘</span>’ +
+                (isCancelled ? ‘ <span style="font-size:.7rem;color:var(--rose);letter-spacing:.1em;">CANCELLED</span>’ : ‘’) +
+                ‘<div style="font-size:.82rem;color:var(--muted);">’ + esc(b.treatment) + (b.addon ? ‘ + ‘ + esc(b.addon) : ‘’) + ‘ · ‘ + esc(b.time_label) + ‘</div>’ +
+              ‘</div>’ +
+              ‘<span style="color:var(--gold);font-family:\’Cormorant Garamond\’,serif;">’ + (b.price_aud > 0 ? money(b.price_aud) : ‘’) + ‘</span>’ +
+            ‘</div>’;
+          }).join(‘’) +
+        ‘</div>’;
+      }
+
       function render(filter) {
-        var f = (filter || '').toLowerCase();
-        $('cl-list').innerHTML = r.clients.filter(function (c) {
+        var f = (filter || ‘’).toLowerCase();
+        var filtered = r.clients.filter(function (c) {
           return !f || (c.name + c.phone + c.email).toLowerCase().indexOf(f) > -1;
-        }).map(function (c) {
-          var badge = c.next_booking ? '<span class="badge next">Booked ' + dayLabel(c.next_booking).split(' ').slice(0, 3).join(' ') + '</span>'
-            : (c.visits === 1 ? '<span class="badge new1">1 visit</span>' : '');
+        });
+        $(‘cl-list’).innerHTML = filtered.map(function (c, idx) {
+          var badge = c.next_booking ? ‘<span class="badge next">Booked ‘ + dayLabel(c.next_booking).split(‘ ‘).slice(0, 3).join(‘ ‘) + ‘</span>’
+            : (c.visits === 1 ? ‘<span class="badge new1">1 visit</span>’ : ‘’);
           var hasFlags = c.intake && c.intake.flags && c.intake.flags.length;
           var formBadge = c.intake ? (hasFlags
-            ? '<span class="badge flag">⚠ ' + esc(c.intake.flags.join(', ')) + '</span>'
-            : '<span class="badge form">form ✓</span>') : '';
-          return '<div class="card">' +
-            '<div class="bk-row1"><span class="bk-name" style="font-size:1.05rem;">' + esc(c.name) + badge + formBadge + '</span>' +
-            '<span class="bk-price">' + money(c.total_aud) + '</span></div>' +
-            '<div class="cl-stats">' +
-              '<span><b>' + c.visits + '</b> visit' + (c.visits === 1 ? '' : 's') + '</span>' +
-              (c.last_visit ? '<span>last <b>' + c.last_visit + '</b></span>' : '') +
-              (c.next_booking ? '<span>next <b>' + esc(c.next_treatment || '') + '</b></span>' : '') +
-            '</div>' +
-            '<div class="bk-contact">' +
-              '<a class="pill" href="tel:' + esc(c.phone) + '">☎ ' + esc(c.phone) + '</a>' +
-              '<a class="pill" href="sms:' + esc(c.phone) + '">SMS</a>' +
-              (c.email ? '<a class="pill" href="mailto:' + esc(c.email) + '">' + esc(c.email) + '</a>' : '') +
-            '</div>' +
-            (c.intake && c.intake.summary ? '<div class="bk-notes' + (hasFlags ? ' flag' : '') + '">Pre-treatment form (' + esc(c.intake.date) + '): ' + esc(c.intake.summary) + '</div>' : '') +
-            (c.last_notes ? '<div class="bk-notes">' + esc(c.last_notes) + '</div>' : '') +
-          '</div>';
-        }).join('') || '<div class="empty">No matches.</div>';
+            ? ‘<span class="badge flag">&#9888; ‘ + esc(c.intake.flags.join(‘, ‘)) + ‘</span>’
+            : ‘<span class="badge form">form &#10003;</span>’) : ‘’;
+          var cardId = ‘cl-card-’ + idx;
+          var histId = ‘cl-hist-’ + idx;
+          return ‘<div class="card" id="’ + cardId + ‘" style="cursor:pointer;">’ +
+            ‘<div class="bk-row1"><span class="bk-name" style="font-size:1.05rem;">’ + esc(c.name) + badge + formBadge + ‘</span>’ +
+            ‘<span class="bk-price">’ + money(c.total_aud) + ‘</span></div>’ +
+            ‘<div class="cl-stats">’ +
+              ‘<span><b>’ + c.visits + ‘</b> visit’ + (c.visits === 1 ? ‘’ : ‘s’) + ‘</span>’ +
+              (c.first_visit ? ‘<span>first <b>’ + c.first_visit + ‘</b></span>’ : ‘’) +
+              (c.last_visit ? ‘<span>last <b>’ + c.last_visit + ‘</b></span>’ : ‘’) +
+              (c.next_booking ? ‘<span>next <b>’ + esc(c.next_treatment || ‘’) + ‘</b></span>’ : ‘’) +
+            ‘</div>’ +
+            ‘<div class="bk-contact">’ +
+              ‘<a class="pill" href="tel:’ + esc(c.phone) + ‘" onclick="event.stopPropagation()">&#9742; ‘ + esc(c.phone) + ‘</a>’ +
+              ‘<a class="pill" href="sms:’ + esc(c.phone) + ‘" onclick="event.stopPropagation()">SMS</a>’ +
+              (c.email ? ‘<a class="pill" href="mailto:’ + esc(c.email) + ‘" onclick="event.stopPropagation()">’ + esc(c.email) + ‘</a>’ : ‘’) +
+            ‘</div>’ +
+            (c.intake && c.intake.summary ? ‘<div class="bk-notes’ + (hasFlags ? ‘ flag’ : ‘’) + ‘">Pre-treatment form (‘ + esc(c.intake.date) + ‘): ‘ + esc(c.intake.summary) + ‘</div>’ : ‘’) +
+            (c.last_notes ? ‘<div class="bk-notes">’ + esc(c.last_notes) + ‘</div>’ : ‘’) +
+            ‘<div id="’ + histId + ‘" style="display:none;">’ + historyHtml(c) + ‘</div>’ +
+            ‘<div style="font-size:.7rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-top:10px;" data-toggle="’ + histId + ‘">&#9660; Booking history</div>’ +
+          ‘</div>’;
+        }).join(‘’) || ‘<div class="empty">No matches.</div>’;
+
+        // Wire up expand/collapse
+        $(‘cl-list’).querySelectorAll(‘[data-toggle]’).forEach(function (btn) {
+          btn.addEventListener(‘click’, function (e) {
+            e.stopPropagation();
+            var hist = document.getElementById(btn.dataset.toggle);
+            var open = hist.style.display === ‘block’;
+            hist.style.display = open ? ‘none’ : ‘block’;
+            btn.textContent = (open ? ‘▼’ : ‘▲’) + ‘ Booking history’;
+          });
+        });
       }
-      render('');
-      $('cl-search').addEventListener('input', function (e) { render(e.target.value); });
+
+      render(‘’);
+      $(‘cl-search’).addEventListener(‘input’, function (e) { render(e.target.value); });
     }).catch(function () {});
   }
 
@@ -331,7 +420,7 @@
   function boot() {
     if (!TOKEN) { showLock(); return; }
     api('/api/admin/blocked').then(function () {
-      showApp(); loadDiary(); loadClients(); loadTimeOff(); loadSurvey();
+      showApp(); loadDiary(false); loadClients(); loadTimeOff(); loadSurvey();
     }).catch(function () {});
   }
   boot();
