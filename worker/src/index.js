@@ -33,7 +33,7 @@ const OPEN_DAYS = [1, 2];        // Mon, Tue
 const OPEN_MIN = 10 * 60;        // 10:00am
 const CLOSE_MIN = 20 * 60;       // 8:00pm
 const GRID_MIN = 30;             // slot start times every 30 min
-const BUFFER_MIN = 15;           // turnover between clients
+const BUFFER_MIN = 30;           // turnover between clients (setup/cleanup)
 const MIN_NOTICE_MIN = 12 * 60;  // bookings need 12h notice
 const HORIZON_DAYS = 60;         // how far ahead clients can book
 
@@ -448,11 +448,10 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     ).bind(now.date, phone, email || ' ').first();
     if (dup.n >= 2) return json({ error: 'too_many_bookings' }, 429, cors);
 
-    // Verify Stripe deposit — required when payments are configured
+    // Stripe deposit — optional (verify only when a payment_intent_id is supplied)
     let paymentIntentId = '';
-    if (env.STRIPE_SECRET_KEY) {
-      const pid = String(b.payment_intent_id || '').trim();
-      if (!pid) return json({ error: 'deposit_required' }, 402, cors);
+    const pid = String(b.payment_intent_id || '').trim();
+    if (pid && env.STRIPE_SECRET_KEY) {
       const sr = await fetch(`https://api.stripe.com/v1/payment_intents/${encodeURIComponent(pid)}`, {
         headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
       });
@@ -1009,6 +1008,20 @@ async function handleAdmin(req, env, url, path, cors) {
   }
 
   // Idempotent schema migration — creates any tables added after the initial deploy.
+  // Update a treatment's duration or price — POST /api/admin/update-treatment {id, duration_min?, price_aud?}
+  if (path === '/api/admin/update-treatment' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    if (!b.id) return json({ error: 'missing id' }, 400, cors);
+    if (b.duration_min != null) {
+      await db.prepare('UPDATE treatments SET duration_min = ? WHERE id = ?').bind(b.duration_min, b.id).run();
+    }
+    if (b.price_aud != null) {
+      await db.prepare('UPDATE treatments SET price_aud = ? WHERE id = ?').bind(b.price_aud, b.id).run();
+    }
+    const { results } = await db.prepare('SELECT * FROM treatments WHERE id = ?').bind(b.id).all();
+    return json({ ok: true, treatment: results[0] || null }, 200, cors);
+  }
+
   if (path === '/api/admin/migrate' && req.method === 'POST') {
     await db.prepare(
       `CREATE TABLE IF NOT EXISTS slot_overrides (date TEXT NOT NULL, start_min INTEGER NOT NULL, PRIMARY KEY (date, start_min))`
