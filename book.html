@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Book Online | Revive Aesthetics — Adelaide Skin Treatments</title>
-<meta name="description" content="Book your microneedling or skin consultation online — Revive Aesthetics, Adelaide. Mondays & Tuesdays, instant confirmation." />
+<title>Book Online | Revive Aesthetics -- Adelaide Skin Treatments</title>
+<meta name="description" content="Book your microneedling or skin consultation online -- Revive Aesthetics, Adelaide. Mondays & Tuesdays, instant confirmation." />
 <meta name="theme-color" content="#2B0F1A" />
 <meta name="robots" content="index, follow" />
 <link rel="canonical" href="https://reviveaestheticsadl.com.au/book.html" />
@@ -194,7 +194,7 @@
   <div class="wrap">
     <p class="eyebrow" style="color:var(--rose);">Online Booking</p>
     <h1>Book your <em>appointment</em></h1>
-    <p>Mondays &amp; Tuesdays, 9am – 9pm · instant confirmation</p>
+    <p>Mondays &amp; Tuesdays, 9am - 9pm · instant confirmation</p>
   </div>
 </section>
 
@@ -227,7 +227,7 @@
     <div class="panel" id="p-treatment">
       <h2>Choose your treatment</h2>
       <p class="sub">Every treatment includes a skin chat so your session fits your goals.</p>
-      <div class="loading" id="t-loading">Loading treatments…</div>
+      <div class="loading" id="t-loading">Loading treatments...</div>
       <div class="t-grid" id="t-grid"></div>
     </div>
 
@@ -236,7 +236,7 @@
       <h2>Pick a time</h2>
       <p class="sub" id="time-sub"></p>
       <div class="chips" id="addon-wrap" style="margin-bottom:30px;"></div>
-      <div class="loading" id="a-loading">Checking availability…</div>
+      <div class="loading" id="a-loading">Checking availability...</div>
       <div class="chips" id="date-chips"></div>
       <div class="times" id="time-wrap" style="display:none;">
         <h3 id="time-title"></h3>
@@ -249,7 +249,7 @@
     <!-- step 3: details -->
     <div class="panel" id="p-details">
       <h2>Your details</h2>
-      <p class="sub">Almost done — we just need to know who's coming in.</p>
+      <p class="sub">Almost done -- we just need to know who's coming in.</p>
       <div class="summary">
         <span class="what" id="sum-what"></span>
         <span class="when" id="sum-when"></span>
@@ -259,7 +259,7 @@
         <div class="field"><label for="f-phone">Phone</label><input id="f-phone" type="tel" required autocomplete="tel" /></div>
         <div class="field"><label for="f-email">Email</label><input id="f-email" type="email" required autocomplete="email" /></div>
         <div class="field"><label for="f-notes">Anything Stefani should know? <span style="text-transform:none;letter-spacing:0;">(optional)</span></label>
-          <textarea id="f-notes" placeholder="Skin concerns, first visit, current products…"></textarea></div>
+          <textarea id="f-notes" placeholder="Skin concerns, first visit, current products..."></textarea></div>
         <div class="hp"><label>Website</label><input id="f-website" tabindex="-1" autocomplete="off" /></div>
         <div class="msg err" id="book-msg"></div>
         <button type="submit" class="btn" id="book-btn">Confirm Booking &rarr;</button>
@@ -300,11 +300,11 @@
         </svg>
         <h2>You're booked in</h2>
         <p class="detail"><strong id="done-what"></strong><span id="done-when"></span></p>
-        <p class="note">One quick thing before your visit — please fill in your short pre-treatment form so Stefani can tailor your treatment. It only takes a couple of minutes.</p>
+        <p class="note">One quick thing before your visit -- please fill in your short pre-treatment form so Stefani can tailor your treatment. It only takes a couple of minutes.</p>
         <div class="done-actions" style="margin-bottom:22px;">
           <a class="btn" id="intake-link" href="intake.html">Complete pre-treatment form</a>
         </div>
-        <p class="note" style="margin-top:0;">A reminder will come closer to the day. Need to change or cancel? Use the link below — or just call Stefani on <a href="tel:0404967051" style="text-decoration:underline;">0404 967 051</a>.</p>
+        <p class="note" style="margin-top:0;">A reminder will come closer to the day. Need to change or cancel? Use the link below -- or just call Stefani on <a href="tel:0404967051" style="text-decoration:underline;">0404 967 051</a>.</p>
         <div class="done-actions">
           <a class="btn" style="background:transparent;color:var(--plum);" id="gcal-link" target="_blank" rel="noopener">Add to Google Calendar</a>
           <a class="btn" style="background:transparent;color:var(--plum);" id="cancel-link">Cancel / Change</a>
@@ -317,10 +317,10 @@
       <div class="done-card">
         <h2 id="c-title">Cancel this booking?</h2>
         <p class="detail" id="c-detail"></p>
-        <p class="note" id="c-note">If something's come up, no stress — cancel below or call Stefani to find another time.</p>
+        <p class="note" id="c-note">If something's come up, no stress -- cancel below or call Stefani to find another time.</p>
         <div class="done-actions" id="c-actions">
           <button class="btn" id="c-confirm">Yes, Cancel Booking</button>
-          <a class="btn" style="background:transparent;color:var(--plum);" href="book.html">Keep it — book another</a>
+          <a class="btn" style="background:transparent;color:var(--plum);" href="book.html">Keep it -- book another</a>
         </div>
       </div>
     </div>
@@ -386,7 +386,7 @@
     show('p-cancel', null);
     api('/api/booking?id=' + encodeURIComponent(qs.get('cancel')) + '&token=' + encodeURIComponent(qs.get('token')))
       .then(function (r) {
-        if (!r.ok) { $('c-title').textContent = 'Booking not found'; $('c-actions').style.display = 'none'; $('c-note').textContent = 'This link looks invalid — call Stefani on 0404 967 051.'; return; }
+        if (!r.ok) { $('c-title').textContent = 'Booking not found'; $('c-actions').style.display = 'none'; $('c-note').textContent = 'This link looks invalid -- call Stefani on 0404 967 051.'; return; }
         var b = r.data;
         $('c-detail').innerHTML = '<strong>' + b.treatment + '</strong>' + b.date_label + ', ' + b.time_label;
         if (b.status !== 'confirmed') { $('c-title').textContent = 'Already cancelled'; $('c-confirm').style.display = 'none'; }
@@ -396,7 +396,7 @@
             body: JSON.stringify({ id: qs.get('cancel'), token: qs.get('token') }) })
             .then(function () {
               $('c-title').textContent = 'Booking cancelled';
-              $('c-note').textContent = 'All done — hope to see you again soon.';
+              $('c-note').textContent = 'All done -- hope to see you again soon.';
               $('c-confirm').style.display = 'none';
             });
         });
@@ -467,7 +467,7 @@
       state.availability = r.data.dates || {};
       var dates = Object.keys(state.availability);
       if (!dates.length) {
-        $('time-msg').textContent = 'No times available in the next two months — please call 0404 967 051.';
+        $('time-msg').textContent = 'No times available in the next two months -- please call 0404 967 051.';
         return;
       }
       var chips = $('date-chips'); var lastMonth = '';
@@ -511,144 +511,144 @@
     $('time-wrap').style.display = 'block';
   }
 
-  // Step 3 submit — book directly (deposit step bypassed)
-  $(‘book-form’).addEventListener(‘submit’, function (e) {
+  // Step 3 submit -- book directly (deposit step bypassed)
+  $('book-form').addEventListener('submit', function (e) {
     e.preventDefault();
-    $(‘book-msg’).textContent = ‘’;
-    var btn = $(‘book-btn’); btn.disabled = true; btn.textContent = ‘Booking…’;
+    $('book-msg').textContent = '';
+    var btn = $('book-btn'); btn.disabled = true; btn.textContent = 'Booking...';
     state.formData = {
       treatment: state.treatment.id, addons: state.sel.map(function (a) { return a.id; }),
       date: state.date, start_min: state.min,
-      name: $(‘f-name’).value, phone: $(‘f-phone’).value,
-      email: $(‘f-email’).value, notes: $(‘f-notes’).value,
-      website: $(‘f-website’).value,
+      name: $('f-name').value, phone: $('f-phone').value,
+      email: $('f-email').value, notes: $('f-notes').value,
+      website: $('f-website').value,
     };
-    api(‘/api/book’, {
-      method: ‘POST’, headers: { ‘content-type’: ‘application/json’ },
+    api('/api/book', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify(state.formData),
     }).then(function (r) {
-      btn.disabled = false; btn.textContent = ‘Confirm Booking →’;
+      btn.disabled = false; btn.textContent = 'Confirm Booking →';
       if (!r.ok) {
         var errs = {
-          slot_unavailable: ‘That time was just taken — please pick another time.’,
-          too_many_bookings: ‘You already have upcoming bookings — call 0404 967 051.’,
+          slot_unavailable: 'That time was just taken -- please pick another time.',
+          too_many_bookings: 'You already have upcoming bookings -- call 0404 967 051.',
         };
-        $(‘book-msg’).textContent = errs[r.data.error] || ‘Something went wrong — please call 0404 967 051.’;
-        if (r.data.error === ‘slot_unavailable’) { show(‘p-time’, 2); loadAvailability(); }
+        $('book-msg').textContent = errs[r.data.error] || 'Something went wrong -- please call 0404 967 051.';
+        if (r.data.error === 'slot_unavailable') { show('p-time', 2); loadAvailability(); }
         return;
       }
-      showBookingSuccess(r.data, ‘’);
+      showBookingSuccess(r.data, '');
     }).catch(function () {
-      btn.disabled = false; btn.textContent = ‘Confirm Booking →’;
-      $(‘book-msg’).textContent = ‘Connection problem — please try again or call 0404 967 051.’;
+      btn.disabled = false; btn.textContent = 'Confirm Booking →';
+      $('book-msg').textContent = 'Connection problem -- please try again or call 0404 967 051.';
     });
   });
 
   function goToDeposit() {
-    var btn = $(‘book-btn’); btn.disabled = true; btn.textContent = ‘Loading…’;
+    var btn = $('book-btn'); btn.disabled = true; btn.textContent = 'Loading...';
     var names = selNames();
-    $(‘dep-what’).textContent = state.treatment.name + (names ? ‘ + ‘ + names : ‘’);
+    $('dep-what').textContent = state.treatment.name + (names ? ' + ' + names : '');
     var f = fmtDateLabel(state.date);
-    $(‘dep-when’).textContent = f.dow + ‘ ‘ + f.day + ‘ · ‘ + state.formData.start_min;
+    $('dep-when').textContent = f.dow + ' ' + f.day + ' · ' + state.formData.start_min;
     // lazy-init Stripe Card Element
     if (!state.stripe) {
       state.stripe = Stripe(STRIPE_PK);
       var elements = state.stripe.elements();
-      state.cardElement = elements.create(‘card’, {
+      state.cardElement = elements.create('card', {
         style: {
-          base: { fontFamily: ‘Jost, sans-serif’, fontSize: ‘15px’, color: ‘#2B0F1A’,
-                  ‘::placeholder’: { color: ‘#b0a090’ } },
-          invalid: { color: ‘#c0392b’ },
+          base: { fontFamily: 'Jost, sans-serif', fontSize: '15px', color: '#2B0F1A',
+                  '::placeholder': { color: '#b0a090' } },
+          invalid: { color: '#c0392b' },
         },
         hidePostalCode: true,
       });
-      state.cardElement.mount(‘#dep-card-element’);
-      state.cardElement.on(‘change’, function (ev) {
-        var el = $(‘dep-card-errors’);
-        if (ev.error) { el.textContent = ev.error.message; el.style.display = ‘block’; }
-        else { el.textContent = ‘’; el.style.display = ‘none’; }
+      state.cardElement.mount('#dep-card-element');
+      state.cardElement.on('change', function (ev) {
+        var el = $('dep-card-errors');
+        if (ev.error) { el.textContent = ev.error.message; el.style.display = 'block'; }
+        else { el.textContent = ''; el.style.display = 'none'; }
       });
     }
     // Create PaymentIntent on the server
-    api(‘/api/create-payment-intent’, {
-      method: ‘POST’, headers: { ‘content-type’: ‘application/json’ },
+    api('/api/create-payment-intent', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: state.formData.name }),
     }).then(function (r) {
-      btn.disabled = false; btn.textContent = ‘Continue to Deposit →’;
+      btn.disabled = false; btn.textContent = 'Continue to Deposit →';
       if (!r.ok) {
-        $(‘book-msg’).textContent = ‘Could not start payment — please try again or call 0404 967 051.’;
+        $('book-msg').textContent = 'Could not start payment -- please try again or call 0404 967 051.';
         return;
       }
       state.clientSecret = r.data.client_secret;
       // Update dep-when properly now we have the time label
       var price = state.treatment.price_aud + selPrice();
-      $(‘dep-when’).textContent = f.dow + ‘ ‘ + f.day + ‘ · ‘ + state.timeLabel + (price > 0 ? ‘ · $’ + price : ‘’);
-      show(‘p-deposit’, 4);
+      $('dep-when').textContent = f.dow + ' ' + f.day + ' · ' + state.timeLabel + (price > 0 ? ' · $' + price : '');
+      show('p-deposit', 4);
     }).catch(function () {
-      btn.disabled = false; btn.textContent = ‘Continue to Deposit →’;
-      $(‘book-msg’).textContent = ‘Connection problem — please try again.’;
+      btn.disabled = false; btn.textContent = 'Continue to Deposit →';
+      $('book-msg').textContent = 'Connection problem -- please try again.';
     });
   }
 
-  $(‘dep-back’).addEventListener(‘click’, function () {
-    show(‘p-details’, 3);
+  $('dep-back').addEventListener('click', function () {
+    show('p-details', 3);
   });
 
   function showBookingSuccess(b, paymentIntentId) {
-    $(‘done-what’).textContent = b.treatment + (b.addon ? ‘ + ‘ + b.addon : ‘’);
-    $(‘done-when’).textContent = b.date_label + ‘ · ‘ + b.time_label;
-    var start = b.date.replace(/-/g, ‘’) + ‘T’ + String(Math.floor(state.min / 60)).padStart(2, ‘0’) + String(state.min % 60).padStart(2, ‘0’) + ‘00’;
+    $('done-what').textContent = b.treatment + (b.addon ? ' + ' + b.addon : '');
+    $('done-when').textContent = b.date_label + ' · ' + b.time_label;
+    var start = b.date.replace(/-/g, '') + 'T' + String(Math.floor(state.min / 60)).padStart(2, '0') + String(state.min % 60).padStart(2, '0') + '00';
     var endMin = state.min + b.duration_min;
-    var end = b.date.replace(/-/g, ‘’) + ‘T’ + String(Math.floor(endMin / 60)).padStart(2, ‘0’) + String(endMin % 60).padStart(2, ‘0’) + ‘00’;
-    var cancelUrl = location.origin + location.pathname + ‘?cancel=’ + b.id + ‘&token=’ + b.cancel_token;
-    $(‘intake-link’).href = ‘intake.html?booking=’ + encodeURIComponent(b.id) +
-      ‘&name=’ + encodeURIComponent(state.formData.name) +
-      ‘&phone=’ + encodeURIComponent(state.formData.phone) +
-      ‘&email=’ + encodeURIComponent(state.formData.email);
-    $(‘gcal-link’).href = ‘https://calendar.google.com/calendar/render?action=TEMPLATE’ +
-      ‘&text=’ + encodeURIComponent(b.treatment + (b.addon ? ‘ + ‘ + b.addon : ‘’) + ‘ — Revive Aesthetics’) +
-      ‘&dates=’ + start + ‘/’ + end + ‘&ctz=Australia/Adelaide’ +
-      ‘&details=’ + encodeURIComponent(‘Revive Aesthetics, Adelaide\nCancel/change: ‘ + cancelUrl) +
-      ‘&location=’ + encodeURIComponent(‘Adelaide SA’);
-    $(‘cancel-link’).href = cancelUrl;
-    show(‘p-done’, null);
+    var end = b.date.replace(/-/g, '') + 'T' + String(Math.floor(endMin / 60)).padStart(2, '0') + String(endMin % 60).padStart(2, '0') + '00';
+    var cancelUrl = location.origin + location.pathname + '?cancel=' + b.id + '&token=' + b.cancel_token;
+    $('intake-link').href = 'intake.html?booking=' + encodeURIComponent(b.id) +
+      '&name=' + encodeURIComponent(state.formData.name) +
+      '&phone=' + encodeURIComponent(state.formData.phone) +
+      '&email=' + encodeURIComponent(state.formData.email);
+    $('gcal-link').href = 'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+      '&text=' + encodeURIComponent(b.treatment + (b.addon ? ' + ' + b.addon : '') + ' -- Revive Aesthetics') +
+      '&dates=' + start + '/' + end + '&ctz=Australia/Adelaide' +
+      '&details=' + encodeURIComponent('Revive Aesthetics, Adelaide\nCancel/change: ' + cancelUrl) +
+      '&location=' + encodeURIComponent('Adelaide SA');
+    $('cancel-link').href = cancelUrl;
+    show('p-done', null);
   }
 
   // Step 4: pay deposit then book
-  $(‘dep-form’).addEventListener(‘submit’, function (e) {
+  $('dep-form').addEventListener('submit', function (e) {
     e.preventDefault();
-    var btn = $(‘dep-btn’); btn.disabled = true; btn.textContent = ‘Processing…’;
-    $(‘dep-msg’).textContent = ‘’;
+    var btn = $('dep-btn'); btn.disabled = true; btn.textContent = 'Processing...';
+    $('dep-msg').textContent = '';
     state.stripe.confirmCardPayment(state.clientSecret, {
       payment_method: { card: state.cardElement },
     }).then(function (result) {
       if (result.error) {
-        btn.disabled = false; btn.textContent = ‘Pay $25 Deposit & Confirm’;
-        $(‘dep-msg’).textContent = result.error.message || ‘Payment failed — please try again.’;
+        btn.disabled = false; btn.textContent = 'Pay $25 Deposit & Confirm';
+        $('dep-msg').textContent = result.error.message || 'Payment failed -- please try again.';
         return;
       }
-      // Payment succeeded — submit booking
+      // Payment succeeded -- submit booking
       var paymentIntentId = result.paymentIntent.id;
       var body = Object.assign({}, state.formData, { payment_intent_id: paymentIntentId });
-      api(‘/api/book’, {
-        method: ‘POST’, headers: { ‘content-type’: ‘application/json’ },
+      api('/api/book', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       }).then(function (r) {
-        btn.disabled = false; btn.textContent = ‘Pay $25 Deposit & Confirm’;
+        btn.disabled = false; btn.textContent = 'Pay $25 Deposit & Confirm';
         if (!r.ok) {
           var errs = {
-            slot_unavailable: ‘That time was just taken — your card has not been charged. Please pick another time.’,
-            too_many_bookings: ‘You already have upcoming bookings — call 0404 967 051.’,
-            deposit_unverified: ‘Payment could not be verified — please call 0404 967 051.’,
+            slot_unavailable: 'That time was just taken -- your card has not been charged. Please pick another time.',
+            too_many_bookings: 'You already have upcoming bookings -- call 0404 967 051.',
+            deposit_unverified: 'Payment could not be verified -- please call 0404 967 051.',
           };
-          $(‘dep-msg’).textContent = errs[r.data.error] || ‘Something went wrong — please call 0404 967 051.’;
-          if (r.data.error === ‘slot_unavailable’) { show(‘p-time’, 2); loadAvailability(); }
+          $('dep-msg').textContent = errs[r.data.error] || 'Something went wrong -- please call 0404 967 051.';
+          if (r.data.error === 'slot_unavailable') { show('p-time', 2); loadAvailability(); }
           return;
         }
         showBookingSuccess(r.data, paymentIntentId);
       }).catch(function () {
-        btn.disabled = false; btn.textContent = ‘Pay $25 Deposit & Confirm’;
-        $(‘dep-msg’).textContent = ‘Booking could not be confirmed after payment — please call 0404 967 051 immediately.’;
+        btn.disabled = false; btn.textContent = 'Pay $25 Deposit & Confirm';
+        $('dep-msg').textContent = 'Booking could not be confirmed after payment -- please call 0404 967 051 immediately.';
       });
     });
   });
