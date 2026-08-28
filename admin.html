@@ -63,6 +63,11 @@
   .block-form input { padding:12px; border:1px solid rgba(43,15,26,.18); font-family:'Jost',sans-serif; }
   .btn { font-family:'Jost',sans-serif; letter-spacing:.14em; text-transform:uppercase; font-size:.72rem; padding:12px 22px; border:1px solid var(--plum); background:var(--plum); color:var(--cream); cursor:pointer; }
   .btn--ghost { background:transparent; color:var(--plum); }
+  /* the header is dark aubergine - a plum ghost button vanishes on it */
+  .signout { font-family:'Jost',sans-serif; letter-spacing:.14em; text-transform:uppercase;
+    font-size:.58rem; padding:7px 14px; margin-left:12px; cursor:pointer;
+    background:transparent; border:1px solid rgba(194,168,120,.55); color:var(--gold); }
+  .signout:hover { border-color:var(--gold); background:rgba(194,168,120,.12); }
 
   .bar-row { margin-bottom:10px; }
   .bar-lbl { display:flex; justify-content:space-between; font-size:.86rem; margin-bottom:4px; }
@@ -94,7 +99,7 @@
     <div class="wrap">
       <div class="top-row">
         <div><h1>Studio Hub</h1></div>
-        <div class="sub">Revive Aesthetics <button id="signout" class="btn btn--ghost" style="font-size:.6rem;padding:6px 12px;margin-left:10px;">Sign out</button></div>
+        <div class="sub">Revive Aesthetics <button id="signout" class="signout">Sign out</button></div>
       </div>
       <div class="tabs">
         <button class="tab on" data-t="diary">Diary</button>
