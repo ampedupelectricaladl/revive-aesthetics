@@ -23,8 +23,8 @@ content, and help run her business, the same way Marcus's assistant helps him.
 
 ## The business
 - **Owner:** Stefani
-- **What:** Boutique skin studio — **chemical peels · microneedling · skin consultations**
-- **Hours:** Mon & Tue, 9am–9pm (Australia/Adelaide)
+- **What:** Boutique skin studio — **microneedling · LED light therapy · lash lifts · lymphatic massage · skin consultations**
+- **Hours:** Mon & Tue, 10am–8pm (Australia/Adelaide)
 - **Phone:** 0404 967 051 · **Email:** reviveaestheticsadl@gmail.com
 - **Instagram:** @reviveaesthetics.adl
 - **Website:** https://reviveaestheticsadl.com.au (GitHub Pages)
@@ -40,7 +40,7 @@ content, and help run her business, the same way Marcus's assistant helps him.
 - `assets/` — logos + images.
 - `worker/` — the booking API (Cloudflare Worker + D1), **LIVE** at
   `https://revive-booking.ampedup.workers.dev`
-  - `src/index.js` — availability engine (Mon/Tue 9am–9pm, 30-min grid, 15-min buffer,
+  - `src/index.js` — availability engine (Mon/Tue 10am–8pm, 30-min grid, 30-min buffer,
     12h min notice, 60-day horizon), book/cancel, Telegram alerts, `/api/admin/*` endpoints.
   - `schema.sql` — tables + seed treatments/add-ons.
   - `deploy.sh` — one-shot deploy (D1 → schema → deploy → secrets → wires API URL → pushes site).
