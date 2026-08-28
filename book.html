@@ -516,7 +516,7 @@
     e.preventDefault();
     $(‘book-msg’).textContent = ‘’;
     var btn = $(‘book-btn’); btn.disabled = true; btn.textContent = ‘Booking…’;
-    var body = {
+    state.formData = {
       treatment: state.treatment.id, addons: state.sel.map(function (a) { return a.id; }),
       date: state.date, start_min: state.min,
       name: $(‘f-name’).value, phone: $(‘f-phone’).value,
@@ -525,7 +525,7 @@
     };
     api(‘/api/book’, {
       method: ‘POST’, headers: { ‘content-type’: ‘application/json’ },
-      body: JSON.stringify(body),
+      body: JSON.stringify(state.formData),
     }).then(function (r) {
       btn.disabled = false; btn.textContent = ‘Confirm Booking →’;
       if (!r.ok) {
