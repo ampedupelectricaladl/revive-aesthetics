@@ -94,7 +94,7 @@
     <div class="wrap">
       <div class="top-row">
         <div><h1>Studio Hub</h1></div>
-        <div class="sub">Revive Aesthetics</div>
+        <div class="sub">Revive Aesthetics <button id="signout" class="btn btn--ghost" style="font-size:.6rem;padding:6px 12px;margin-left:10px;">Sign out</button></div>
       </div>
       <div class="tabs">
         <button class="tab on" data-t="diary">Diary</button>
@@ -115,29 +115,72 @@
 <script>
 (function () {
   var API = 'https://revive-booking.ampedup.workers.dev';
-  var TOKEN = localStorage.getItem('revive_admin_token') || (location.hash.length > 10 ? location.hash.slice(1) : '');
-  if (location.hash.length > 10) { localStorage.setItem('revive_admin_token', TOKEN); history.replaceState(null, '', location.pathname); }
+  var STORE = 'revive_admin_token';
+
+  // localStorage throws in private browsing / when site data is blocked - never let
+  // that take the whole hub down.
+  function readStored() { try { return localStorage.getItem(STORE) || ''; } catch (e) { return ''; } }
+  function keepToken(t) { try { localStorage.setItem(STORE, t); } catch (e) {} }
+  function forgetToken() { try { localStorage.removeItem(STORE); } catch (e) {} }
+
+  // A code in the link (#code) ALWAYS beats a saved one. It used to be the other way
+  // round, and the link was wiped from the address bar either way - so one wrong code
+  // saved once locked the hub for good, even from a correct link.
+  var linkToken = '';
+  try { linkToken = location.hash.length > 10 ? decodeURIComponent(location.hash.slice(1)) : ''; } catch (e) { linkToken = location.hash.slice(1); }
+  var TOKEN = linkToken || readStored();
+
+  // Accept the code however it arrives: pasted whole link, with 'Bearer', wrapped in
+  // quotes by a mail client, or with a stray space or line break from a phone.
+  function cleanCode(s) {
+    s = String(s == null ? '' : s).trim();
+    if (/^https?:/i.test(s) && s.indexOf('#') > -1) s = s.slice(s.indexOf('#') + 1);
+    s = s.replace(/^Bearer\s+/i, '');
+    s = s.replace(/^["'<\s]+/, '').replace(/["'>\s]+$/, '');
+    return s.replace(/\s+/g, '');
+  }
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s || '').replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function money(n) { return '$' + Number(n || 0).toLocaleString('en-AU'); }
+  function fail(code, msg) { var e = new Error(msg); e.code = code; return e; }
   function api(path, opts) {
     opts = opts || {};
     opts.headers = Object.assign({ 'content-type': 'application/json', Authorization: 'Bearer ' + TOKEN }, opts.headers || {});
     return fetch(API + path, opts).then(function (r) {
-      if (r.status === 401) { showLock('That code isn’t right — try again.'); throw new Error('unauthorised'); }
-      return r.json();
+      if (r.status === 401) {
+        // A rejected code must not stay saved, or every later visit fails on its own.
+        forgetToken();
+        showLock('That code isn’t right — try again.');
+        throw fail(401, 'unauthorised');
+      }
+      if (!r.ok) throw fail(r.status, 'server error');
+      return r.json().catch(function () { throw fail('badjson', 'bad response'); });
+    }, function () {
+      // fetch only rejects when the request never completed - offline, DNS, blocked.
+      throw fail('offline', 'cannot reach the studio system');
     });
   }
   function showLock(msg) {
     $('lock').style.display = 'block'; $('app').style.display = 'none';
     $('lock-msg').textContent = msg || '';
+    busy(false);
   }
-  function showApp() { $('lock').style.display = 'none'; $('app').style.display = 'block'; }
+  function showApp() { $('lock').style.display = 'none'; $('app').style.display = 'block'; busy(false); }
+  function busy(on) {
+    var b = $('unlock');
+    if (!b) return;
+    b.disabled = !!on;
+    b.textContent = on ? 'Checking…' : 'Open';
+  }
 
   $('unlock').addEventListener('click', function () {
-    TOKEN = $('code').value.trim();
-    localStorage.setItem('revive_admin_token', TOKEN);
+    var code = cleanCode($('code').value);
+    if (!code) { showLock('Pop your access code in first.'); return; }
+    TOKEN = code;
+    // NOT saved yet - a code is only kept once the studio system has accepted it.
+    $('lock-msg').textContent = '';
+    busy(true);
     boot();
   });
   $('code').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('unlock').click(); });
@@ -197,31 +240,31 @@
       if (past.length) {
         var pastByDate = {};
         past.forEach(function (b) { (pastByDate[b.date] = pastByDate[b.date] || []).push(b); });
-        html += ‘<div class="day-head" style="margin-top:30px;"><span>Past Appointments</span><span class="cnt">’ + past.length + ‘ total</span></div>’;
+        html += '<div class="day-head" style="margin-top:30px;"><span>Past Appointments</span><span class="cnt">' + past.length + ' total</span></div>';
         Object.keys(pastByDate).sort().reverse().forEach(function (d) {
-          html += ‘<div class="day-head" style="margin-top:14px;font-size:.65rem;"><span>’ + dayLabel(d) + ‘</span></div>’;
+          html += '<div class="day-head" style="margin-top:14px;font-size:.65rem;"><span>' + dayLabel(d) + '</span></div>';
           pastByDate[d].forEach(function (b) {
-            html += ‘<div class="card" style="opacity:.7;">’ +
-              ‘<div class="bk-row1"><span class="bk-time">’ + b.time_label + ‘</span><span class="bk-price">’ + money(b.price_aud) + ‘</span></div>’ +
-              ‘<div class="bk-what">’ + esc(b.treatment) + (b.addon ? ‘ + ‘ + esc(b.addon) : ‘’) + ‘</div>’ +
-              ‘<div class="bk-name">’ + esc(b.name) + ‘</div>’ +
-              ‘<div class="bk-contact">’ +
-                ‘<a class="pill" href="tel:’ + esc(b.phone) + ‘">&#9742; ‘ + esc(b.phone) + ‘</a>’ +
-                ‘<a class="pill" href="sms:’ + esc(b.phone) + ‘">SMS</a>’ +
-                (b.email ? ‘<a class="pill" href="mailto:’ + esc(b.email) + ‘">’ + esc(b.email) + ‘</a>’ : ‘’) +
-              ‘</div>’ +
-              (b.notes ? ‘<div class="bk-notes">’ + esc(b.notes) + ‘</div>’ : ‘’) +
-            ‘</div>’;
+            html += '<div class="card" style="opacity:.7;">' +
+              '<div class="bk-row1"><span class="bk-time">' + b.time_label + '</span><span class="bk-price">' + money(b.price_aud) + '</span></div>' +
+              '<div class="bk-what">' + esc(b.treatment) + (b.addon ? ' + ' + esc(b.addon) : '') + '</div>' +
+              '<div class="bk-name">' + esc(b.name) + '</div>' +
+              '<div class="bk-contact">' +
+                '<a class="pill" href="tel:' + esc(b.phone) + '">&#9742; ' + esc(b.phone) + '</a>' +
+                '<a class="pill" href="sms:' + esc(b.phone) + '">SMS</a>' +
+                (b.email ? '<a class="pill" href="mailto:' + esc(b.email) + '">' + esc(b.email) + '</a>' : '') +
+              '</div>' +
+              (b.notes ? '<div class="bk-notes">' + esc(b.notes) + '</div>' : '') +
+            '</div>';
           });
         });
       }
 
       v.innerHTML = html;
       wireToggle(v, showPast);
-      v.querySelectorAll(‘.bk-cancel’).forEach(function (btn) {
-        btn.addEventListener(‘click’, function () {
-          if (!confirm(‘Cancel ‘ + btn.dataset.name + ‘\’s booking?’)) return;
-          api(‘/api/admin/cancel’, { method: ‘POST’, body: JSON.stringify({ id: btn.dataset.id }) })
+      v.querySelectorAll('.bk-cancel').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          if (!confirm('Cancel ' + btn.dataset.name + '\'s booking?')) return;
+          api('/api/admin/cancel', { method: 'POST', body: JSON.stringify({ id: btn.dataset.id }) })
             .then(function () { loadDiary(showPast); });
         });
       });
@@ -229,103 +272,103 @@
   }
 
   function wireToggle(v, showPast) {
-    var btn = v.querySelector(‘#past-toggle’);
-    if (btn) btn.addEventListener(‘click’, function () { loadDiary(!showPast); });
+    var btn = v.querySelector('#past-toggle');
+    if (btn) btn.addEventListener('click', function () { loadDiary(!showPast); });
   }
 
   // ---------- Clients ----------
   function loadClients() {
-    var v = $(‘v-clients’);
+    var v = $('v-clients');
     // Fetch clients + all bookings (past 2 years to future 3 months) in parallel
     Promise.all([
-      api(‘/api/admin/clients’),
-      api(‘/api/admin/bookings?from=’ + plusDays(-730) + ‘&to=’ + plusDays(90)),
+      api('/api/admin/clients'),
+      api('/api/admin/bookings?from=' + plusDays(-730) + '&to=' + plusDays(90)),
     ]).then(function (results) {
       var r = results[0];
       var allBk = results[1].bookings || [];
-      if (!r.clients.length) { v.innerHTML = ‘<div class="empty">No clients yet — they\’ll appear here as bookings come in.</div>’; return; }
+      if (!r.clients.length) { v.innerHTML = '<div class="empty">No clients yet — they\'ll appear here as bookings come in.</div>'; return; }
 
       // Build per-phone booking index (all statuses)
       var bkByPhone = {};
       allBk.forEach(function (b) {
-        var key = String(b.phone || ‘’).replace(/\D/g, ‘’);
+        var key = String(b.phone || '').replace(/\D/g, '');
         if (!key) return;
         (bkByPhone[key] = bkByPhone[key] || []).push(b);
       });
 
-      var html = ‘<input class="search" id="cl-search" placeholder="Search name, phone, email…" />’ +
-        ‘<div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;">’ + r.total + ‘ client’ + (r.total > 1 ? ‘s’ : ‘’) + ‘ · tap any card to see their booking history</div>’ +
-        ‘<div id="cl-list"></div>’;
+      var html = '<input class="search" id="cl-search" placeholder="Search name, phone, email…" />' +
+        '<div style="font-size:.78rem;color:var(--muted);margin-bottom:12px;">' + r.total + ' client' + (r.total > 1 ? 's' : '') + ' · tap any card to see their booking history</div>' +
+        '<div id="cl-list"></div>';
       v.innerHTML = html;
 
       function historyHtml(c) {
-        var key = String(c.phone || ‘’).replace(/\D/g, ‘’);
+        var key = String(c.phone || '').replace(/\D/g, '');
         var bks = (bkByPhone[key] || []).slice().sort(function (a, b) { return b.date.localeCompare(a.date); });
-        if (!bks.length) return ‘<div style="font-size:.82rem;color:var(--muted);padding:8px 0;">No booking records found.</div>’;
-        return ‘<div style="margin-top:10px;border-top:1px solid rgba(43,15,26,.1);padding-top:10px;">’ +
+        if (!bks.length) return '<div style="font-size:.82rem;color:var(--muted);padding:8px 0;">No booking records found.</div>';
+        return '<div style="margin-top:10px;border-top:1px solid rgba(43,15,26,.1);padding-top:10px;">' +
           bks.map(function (b) {
-            var isCancelled = b.status === ‘cancelled’;
-            return ‘<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid rgba(43,15,26,.06);’ + (isCancelled ? ‘opacity:.45;’ : ‘’) + ‘">’ +
-              ‘<div>’ +
-                ‘<span style="font-family:\’Cormorant Garamond\’,serif;font-size:1.05rem;">’ + esc(b.date_label || b.date) + ‘</span>’ +
-                (isCancelled ? ‘ <span style="font-size:.7rem;color:var(--rose);letter-spacing:.1em;">CANCELLED</span>’ : ‘’) +
-                ‘<div style="font-size:.82rem;color:var(--muted);">’ + esc(b.treatment) + (b.addon ? ‘ + ‘ + esc(b.addon) : ‘’) + ‘ · ‘ + esc(b.time_label) + ‘</div>’ +
-              ‘</div>’ +
-              ‘<span style="color:var(--gold);font-family:\’Cormorant Garamond\’,serif;">’ + (b.price_aud > 0 ? money(b.price_aud) : ‘’) + ‘</span>’ +
-            ‘</div>’;
-          }).join(‘’) +
-        ‘</div>’;
+            var isCancelled = b.status === 'cancelled';
+            return '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid rgba(43,15,26,.06);' + (isCancelled ? 'opacity:.45;' : '') + '">' +
+              '<div>' +
+                '<span style="font-family:\'Cormorant Garamond\',serif;font-size:1.05rem;">' + esc(b.date_label || b.date) + '</span>' +
+                (isCancelled ? ' <span style="font-size:.7rem;color:var(--rose);letter-spacing:.1em;">CANCELLED</span>' : '') +
+                '<div style="font-size:.82rem;color:var(--muted);">' + esc(b.treatment) + (b.addon ? ' + ' + esc(b.addon) : '') + ' · ' + esc(b.time_label) + '</div>' +
+              '</div>' +
+              '<span style="color:var(--gold);font-family:\'Cormorant Garamond\',serif;">' + (b.price_aud > 0 ? money(b.price_aud) : '') + '</span>' +
+            '</div>';
+          }).join('') +
+        '</div>';
       }
 
       function render(filter) {
-        var f = (filter || ‘’).toLowerCase();
+        var f = (filter || '').toLowerCase();
         var filtered = r.clients.filter(function (c) {
           return !f || (c.name + c.phone + c.email).toLowerCase().indexOf(f) > -1;
         });
-        $(‘cl-list’).innerHTML = filtered.map(function (c, idx) {
-          var badge = c.next_booking ? ‘<span class="badge next">Booked ‘ + dayLabel(c.next_booking).split(‘ ‘).slice(0, 3).join(‘ ‘) + ‘</span>’
-            : (c.visits === 1 ? ‘<span class="badge new1">1 visit</span>’ : ‘’);
+        $('cl-list').innerHTML = filtered.map(function (c, idx) {
+          var badge = c.next_booking ? '<span class="badge next">Booked ' + dayLabel(c.next_booking).split(' ').slice(0, 3).join(' ') + '</span>'
+            : (c.visits === 1 ? '<span class="badge new1">1 visit</span>' : '');
           var hasFlags = c.intake && c.intake.flags && c.intake.flags.length;
           var formBadge = c.intake ? (hasFlags
-            ? ‘<span class="badge flag">&#9888; ‘ + esc(c.intake.flags.join(‘, ‘)) + ‘</span>’
-            : ‘<span class="badge form">form &#10003;</span>’) : ‘’;
-          var cardId = ‘cl-card-’ + idx;
-          var histId = ‘cl-hist-’ + idx;
-          return ‘<div class="card" id="’ + cardId + ‘" style="cursor:pointer;">’ +
-            ‘<div class="bk-row1"><span class="bk-name" style="font-size:1.05rem;">’ + esc(c.name) + badge + formBadge + ‘</span>’ +
-            ‘<span class="bk-price">’ + money(c.total_aud) + ‘</span></div>’ +
-            ‘<div class="cl-stats">’ +
-              ‘<span><b>’ + c.visits + ‘</b> visit’ + (c.visits === 1 ? ‘’ : ‘s’) + ‘</span>’ +
-              (c.first_visit ? ‘<span>first <b>’ + c.first_visit + ‘</b></span>’ : ‘’) +
-              (c.last_visit ? ‘<span>last <b>’ + c.last_visit + ‘</b></span>’ : ‘’) +
-              (c.next_booking ? ‘<span>next <b>’ + esc(c.next_treatment || ‘’) + ‘</b></span>’ : ‘’) +
-            ‘</div>’ +
-            ‘<div class="bk-contact">’ +
-              ‘<a class="pill" href="tel:’ + esc(c.phone) + ‘" onclick="event.stopPropagation()">&#9742; ‘ + esc(c.phone) + ‘</a>’ +
-              ‘<a class="pill" href="sms:’ + esc(c.phone) + ‘" onclick="event.stopPropagation()">SMS</a>’ +
-              (c.email ? ‘<a class="pill" href="mailto:’ + esc(c.email) + ‘" onclick="event.stopPropagation()">’ + esc(c.email) + ‘</a>’ : ‘’) +
-            ‘</div>’ +
-            (c.intake && c.intake.summary ? ‘<div class="bk-notes’ + (hasFlags ? ‘ flag’ : ‘’) + ‘">Pre-treatment form (‘ + esc(c.intake.date) + ‘): ‘ + esc(c.intake.summary) + ‘</div>’ : ‘’) +
-            (c.last_notes ? ‘<div class="bk-notes">’ + esc(c.last_notes) + ‘</div>’ : ‘’) +
-            ‘<div id="’ + histId + ‘" style="display:none;">’ + historyHtml(c) + ‘</div>’ +
-            ‘<div style="font-size:.7rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-top:10px;" data-toggle="’ + histId + ‘">&#9660; Booking history</div>’ +
-          ‘</div>’;
-        }).join(‘’) || ‘<div class="empty">No matches.</div>’;
+            ? '<span class="badge flag">&#9888; ' + esc(c.intake.flags.join(', ')) + '</span>'
+            : '<span class="badge form">form &#10003;</span>') : '';
+          var cardId = 'cl-card-' + idx;
+          var histId = 'cl-hist-' + idx;
+          return '<div class="card" id="' + cardId + '" style="cursor:pointer;">' +
+            '<div class="bk-row1"><span class="bk-name" style="font-size:1.05rem;">' + esc(c.name) + badge + formBadge + '</span>' +
+            '<span class="bk-price">' + money(c.total_aud) + '</span></div>' +
+            '<div class="cl-stats">' +
+              '<span><b>' + c.visits + '</b> visit' + (c.visits === 1 ? '' : 's') + '</span>' +
+              (c.first_visit ? '<span>first <b>' + c.first_visit + '</b></span>' : '') +
+              (c.last_visit ? '<span>last <b>' + c.last_visit + '</b></span>' : '') +
+              (c.next_booking ? '<span>next <b>' + esc(c.next_treatment || '') + '</b></span>' : '') +
+            '</div>' +
+            '<div class="bk-contact">' +
+              '<a class="pill" href="tel:' + esc(c.phone) + '" onclick="event.stopPropagation()">&#9742; ' + esc(c.phone) + '</a>' +
+              '<a class="pill" href="sms:' + esc(c.phone) + '" onclick="event.stopPropagation()">SMS</a>' +
+              (c.email ? '<a class="pill" href="mailto:' + esc(c.email) + '" onclick="event.stopPropagation()">' + esc(c.email) + '</a>' : '') +
+            '</div>' +
+            (c.intake && c.intake.summary ? '<div class="bk-notes' + (hasFlags ? ' flag' : '') + '">Pre-treatment form (' + esc(c.intake.date) + '): ' + esc(c.intake.summary) + '</div>' : '') +
+            (c.last_notes ? '<div class="bk-notes">' + esc(c.last_notes) + '</div>' : '') +
+            '<div id="' + histId + '" style="display:none;">' + historyHtml(c) + '</div>' +
+            '<div style="font-size:.7rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-top:10px;" data-toggle="' + histId + '">&#9660; Booking history</div>' +
+          '</div>';
+        }).join('') || '<div class="empty">No matches.</div>';
 
         // Wire up expand/collapse
-        $(‘cl-list’).querySelectorAll(‘[data-toggle]’).forEach(function (btn) {
-          btn.addEventListener(‘click’, function (e) {
+        $('cl-list').querySelectorAll('[data-toggle]').forEach(function (btn) {
+          btn.addEventListener('click', function (e) {
             e.stopPropagation();
             var hist = document.getElementById(btn.dataset.toggle);
-            var open = hist.style.display === ‘block’;
-            hist.style.display = open ? ‘none’ : ‘block’;
-            btn.textContent = (open ? ‘▼’ : ‘▲’) + ‘ Booking history’;
+            var open = hist.style.display === 'block';
+            hist.style.display = open ? 'none' : 'block';
+            btn.textContent = (open ? '▼' : '▲') + ' Booking history';
           });
         });
       }
 
-      render(‘’);
-      $(‘cl-search’).addEventListener(‘input’, function (e) { render(e.target.value); });
+      render('');
+      $('cl-search').addEventListener('input', function (e) { render(e.target.value); });
     }).catch(function () {});
   }
 
@@ -418,11 +461,37 @@
   }
 
   function boot() {
-    if (!TOKEN) { showLock(); return; }
-    api('/api/admin/blocked').then(function () {
-      showApp(); loadDiary(false); loadClients(); loadTimeOff(); loadSurvey();
-    }).catch(function () { showLock(); });
+    if (!TOKEN) { showLock(''); return; }
+    busy(true);
+    api('/api/admin/blocked').then(function (r) {
+      // 200 with a body that isn't the real thing is not a successful sign-in.
+      if (!r || typeof r !== 'object' || !r.blocked) throw fail('badjson', 'bad response');
+      keepToken(TOKEN);
+      if (location.hash) history.replaceState(null, '', location.pathname);
+      showApp();
+      loadDiary(false); loadClients(); loadTimeOff(); loadSurvey();
+    }).catch(function (e) {
+      var code = e && e.code;
+      if (code === 401) return;  // api() has already cleared it and said so
+      // Never blame her code for something that isn't her code.
+      showLock(code === 'offline'
+        ? 'Can\u2019t reach the studio system — check your internet, then press Open again.'
+        : 'The studio system isn\u2019t answering right now (' + code + '). Your code is fine — try again in a minute.');
+    });
   }
+  // Tapping the saved link while the hub is already open is only a fragment change,
+  // so the page never reloads - pick the new code up and sign in anyway.
+  window.addEventListener('hashchange', function () {
+    if (location.hash.length > 10) {
+      var t = '';
+      try { t = decodeURIComponent(location.hash.slice(1)); } catch (e) { t = location.hash.slice(1); }
+      if (t && t !== TOKEN) { TOKEN = t; $('lock-msg').textContent = ''; boot(); }
+    }
+  });
+  $('signout').addEventListener('click', function () {
+    forgetToken(); TOKEN = ''; $('code').value = '';
+    showLock('Signed out.');
+  });
   boot();
 })();
 </script>

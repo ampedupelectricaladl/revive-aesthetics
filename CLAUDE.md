@@ -46,6 +46,18 @@ content, and help run her business, the same way Marcus's assistant helps him.
   - `deploy.sh` — one-shot deploy (D1 → schema → deploy → secrets → wires API URL → pushes site).
 
 ## How to do common jobs
+- **⚠️ ALWAYS run `node scripts/check-pages.js` before you commit a page.** It
+  compiles every inline `<script>` and refuses anything that would not parse.
+  On 2026-08-26 a commit pasted JS into `admin.html` using curly quotes (`‘ ’`)
+  as string delimiters; that is a syntax error, so the whole script block died and
+  the **Studio Hub silently stopped working for two days** - the page still loaded
+  and still looked right, the access-code button just did nothing. The same bug had
+  already happened once (commit `3d2e0c6`). A `git` pre-commit hook now runs this
+  check, but the hook is local to this clone - run the command yourself on any
+  other machine. **Never paste code from a chat window or a document without
+  checking the quotes.** If you change `admin.html`, also run
+  `node scripts/test-studio-hub.js` (32 checks: signs in for real against the live
+  worker, covers wrong codes, magic links, offline and server errors).
 - **Edit the website:** change the HTML/assets in this repo, then
   `git add -A && git commit -m "..." && git push`. GitHub Pages redeploys automatically.
   Always keep the aubergine/cream/gold brand and the two fonts. Preview your reasoning

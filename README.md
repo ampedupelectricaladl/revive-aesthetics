@@ -46,3 +46,9 @@ cd worker && npx wrangler d1 execute revive-booking --remote \
    Stefani (uses `/api/admin/*`).
 3. **GBP:** create Google Business Profile under her business Gmail.
 4. **Photos:** `assets/about.jpg` + treatment images; swap "coming soon" placeholders.
+
+- `scripts/check-pages.js` - compiles every inline `<script>` in every page.
+  Run it before committing; a pre-commit hook runs it too. Catches the curly-quote
+  syntax error that took the Studio Hub down on 2026-08-26.
+- `scripts/test-studio-hub.js` - signs in to `admin.html` for real against the live
+  worker (32 checks). Run after any change to the hub.
