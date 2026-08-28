@@ -262,7 +262,7 @@
           <textarea id="f-notes" placeholder="Skin concerns, first visit, current products…"></textarea></div>
         <div class="hp"><label>Website</label><input id="f-website" tabindex="-1" autocomplete="off" /></div>
         <div class="msg err" id="book-msg"></div>
-        <button type="submit" class="btn" id="book-btn">Continue to Deposit &rarr;</button>
+        <button type="submit" class="btn" id="book-btn">Confirm Booking &rarr;</button>
       </form>
       <div class="nav-row"><button class="btn-link" data-back="2">&larr; Change time</button><span></span></div>
     </div>
@@ -511,18 +511,37 @@
     $('time-wrap').style.display = 'block';
   }
 
-  // Step 3 submit — store form data and move to deposit step
+  // Step 3 submit — book directly (deposit step bypassed)
   $(‘book-form’).addEventListener(‘submit’, function (e) {
     e.preventDefault();
     $(‘book-msg’).textContent = ‘’;
-    state.formData = {
+    var btn = $(‘book-btn’); btn.disabled = true; btn.textContent = ‘Booking…’;
+    var body = {
       treatment: state.treatment.id, addons: state.sel.map(function (a) { return a.id; }),
       date: state.date, start_min: state.min,
       name: $(‘f-name’).value, phone: $(‘f-phone’).value,
       email: $(‘f-email’).value, notes: $(‘f-notes’).value,
       website: $(‘f-website’).value,
     };
-    goToDeposit();
+    api(‘/api/book’, {
+      method: ‘POST’, headers: { ‘content-type’: ‘application/json’ },
+      body: JSON.stringify(body),
+    }).then(function (r) {
+      btn.disabled = false; btn.textContent = ‘Confirm Booking →’;
+      if (!r.ok) {
+        var errs = {
+          slot_unavailable: ‘That time was just taken — please pick another time.’,
+          too_many_bookings: ‘You already have upcoming bookings — call 0404 967 051.’,
+        };
+        $(‘book-msg’).textContent = errs[r.data.error] || ‘Something went wrong — please call 0404 967 051.’;
+        if (r.data.error === ‘slot_unavailable’) { show(‘p-time’, 2); loadAvailability(); }
+        return;
+      }
+      showBookingSuccess(r.data, ‘’);
+    }).catch(function () {
+      btn.disabled = false; btn.textContent = ‘Confirm Booking →’;
+      $(‘book-msg’).textContent = ‘Connection problem — please try again or call 0404 967 051.’;
+    });
   });
 
   function goToDeposit() {
