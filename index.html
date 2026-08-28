@@ -402,6 +402,31 @@
   .reveal.in { opacity: 1; transform: none; }
   @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
 
+  /* ---------- Instagram grid ---------- */
+  .ig-section { background: var(--plum); }
+  .ig-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 48px;
+  }
+  .ig-tile {
+    position: relative; overflow: hidden; aspect-ratio: 1 / 1; display: block;
+  }
+  .ig-tile img {
+    width: 100%; height: 100%; object-fit: cover;
+    transition: transform .45s ease;
+  }
+  .ig-tile:hover img { transform: scale(1.06); }
+  .ig-overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(43,15,26,0.52); opacity: 0; transition: opacity .3s ease;
+  }
+  .ig-overlay svg { width: 38px; height: 38px; color: var(--cream); }
+  .ig-tile:hover .ig-overlay { opacity: 1; }
+  .ig-cta { text-align: center; }
+  @media (max-width: 600px) { .ig-grid { gap: 3px; } }
+
   /* ---------- Footer ---------- */
   footer.site {
     background: var(--plum); color: var(--cream); text-align: center; padding: 60px 0 40px;
@@ -747,6 +772,59 @@
     </div>
     <div class="reviews-cta">
       <a href="https://g.page/r/CcArQkKpzItSEBM" target="_blank" rel="noopener noreferrer">Read all reviews on Google ↗</a>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== INSTAGRAM ===================== -->
+<section class="ig-section">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="divider" style="background:rgba(194,168,120,0.35);"></div>
+      <p class="eyebrow" style="color:var(--gold);">On Instagram</p>
+      <h2 style="color:var(--cream);">Follow along</h2>
+      <p style="color:rgba(242,231,206,0.68);">Real results, behind-the-scenes and skin tips from the studio.</p>
+    </div>
+    <div class="ig-grid">
+      <a href="https://www.instagram.com/reviveaesthetics.adl/" target="_blank" rel="noopener" class="ig-tile reveal">
+        <img src="assets/lash-lift-result-1.jpg" alt="Korean lash lift result — Revive Aesthetics" loading="lazy" />
+        <span class="ig-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/></svg></span>
+      </a>
+      <a href="https://www.instagram.com/reviveaesthetics.adl/" target="_blank" rel="noopener" class="ig-tile reveal">
+        <img src="assets/lymphatic-result-1.jpg" alt="Lymphatic massage result — Revive Aesthetics" loading="lazy" />
+        <span class="ig-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/></svg></span>
+      </a>
+      <a href="https://www.instagram.com/reviveaesthetics.adl/" target="_blank" rel="noopener" class="ig-tile reveal">
+        <img src="assets/microneedling-result-1.jpg" alt="Microneedling result — Revive Aesthetics" loading="lazy" />
+        <span class="ig-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/></svg></span>
+      </a>
+      <a href="https://www.instagram.com/reviveaesthetics.adl/" target="_blank" rel="noopener" class="ig-tile reveal">
+        <img src="assets/lash-lift-result-3.jpg" alt="Korean lash lift result — Revive Aesthetics" loading="lazy" />
+        <span class="ig-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/></svg></span>
+      </a>
+      <a href="https://www.instagram.com/reviveaesthetics.adl/" target="_blank" rel="noopener" class="ig-tile reveal">
+        <img src="assets/lymphatic-result-3.jpg" alt="Lymphatic massage result — Revive Aesthetics" loading="lazy" />
+        <span class="ig-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/></svg></span>
+      </a>
+      <a href="https://www.instagram.com/reviveaesthetics.adl/" target="_blank" rel="noopener" class="ig-tile reveal">
+        <img src="assets/microneedling-result-2.jpg" alt="Microneedling result — Revive Aesthetics" loading="lazy" />
+        <span class="ig-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/></svg></span>
+      </a>
+      <a href="https://www.instagram.com/reviveaesthetics.adl/" target="_blank" rel="noopener" class="ig-tile reveal">
+        <img src="assets/lash-lift-result-5.jpg" alt="Korean lash lift result — Revive Aesthetics" loading="lazy" />
+        <span class="ig-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/></svg></span>
+      </a>
+      <a href="https://www.instagram.com/reviveaesthetics.adl/" target="_blank" rel="noopener" class="ig-tile reveal">
+        <img src="assets/lymphatic-result-4.jpg" alt="Lymphatic massage result — Revive Aesthetics" loading="lazy" />
+        <span class="ig-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/></svg></span>
+      </a>
+      <a href="https://www.instagram.com/reviveaesthetics.adl/" target="_blank" rel="noopener" class="ig-tile reveal">
+        <img src="assets/lash-lift-result-7.jpg" alt="Korean lash lift result — Revive Aesthetics" loading="lazy" />
+        <span class="ig-overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/></svg></span>
+      </a>
+    </div>
+    <div class="ig-cta reveal">
+      <a href="https://www.instagram.com/reviveaesthetics.adl/" target="_blank" rel="noopener" class="btn btn--ghost">Follow @reviveaesthetics.adl</a>
     </div>
   </div>
 </section>
