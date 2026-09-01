@@ -33,7 +33,7 @@ const OPEN_DAYS = [1, 2];        // Mon, Tue
 const OPEN_MIN = 10 * 60;        // 10:00am
 const CLOSE_MIN = 20 * 60;       // 8:00pm
 const GRID_MIN = 30;             // slot start times every 30 min
-const BUFFER_MIN = 30;           // turnover between clients (setup/cleanup)
+const BUFFER_MIN = 15;           // turnover between clients (setup/cleanup)
 const MIN_NOTICE_MIN = 12 * 60;  // bookings need 12h notice
 const HORIZON_DAYS = 60;         // how far ahead clients can book
 
@@ -365,7 +365,7 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       'SELECT id, name, duration_min, price_aud, description FROM treatments WHERE active = 1 ORDER BY sort'
     ).all();
     const { results: addons } = await db.prepare(
-      'SELECT id, name, duration_min, price_aud FROM addons WHERE active = 1 ORDER BY price_aud DESC, name'
+      'SELECT id, name, duration_min, price_aud, treatment_ids FROM addons WHERE active = 1 ORDER BY price_aud DESC, name'
     ).all();
     return json({ treatments: results, addons }, 200, cors);
   }
@@ -1029,6 +1029,8 @@ async function handleAdmin(req, env, url, path, cors) {
     // Stripe deposit columns — added 2026-08-26; safe to run repeatedly
     await db.exec(`ALTER TABLE bookings ADD COLUMN stripe_payment_intent_id TEXT`).catch(() => {});
     await db.exec(`ALTER TABLE bookings ADD COLUMN deposit_paid INTEGER DEFAULT 0`).catch(() => {});
+    // treatment_ids on addons — added 2026-09-01; empty string = applies to all treatments
+    await db.exec(`ALTER TABLE addons ADD COLUMN treatment_ids TEXT NOT NULL DEFAULT ''`).catch(() => {});
     return json({ ok: true }, 200, cors);
   }
 

@@ -13,11 +13,12 @@ CREATE TABLE IF NOT EXISTS treatments (
 );
 
 CREATE TABLE IF NOT EXISTS addons (
-  id           TEXT PRIMARY KEY,
-  name         TEXT NOT NULL,
-  duration_min INTEGER NOT NULL DEFAULT 0, -- extra time added to the appointment
-  price_aud    INTEGER NOT NULL,
-  active       INTEGER NOT NULL DEFAULT 1
+  id             TEXT PRIMARY KEY,
+  name           TEXT NOT NULL,
+  duration_min   INTEGER NOT NULL DEFAULT 0, -- extra time added to the appointment
+  price_aud      INTEGER NOT NULL,
+  active         INTEGER NOT NULL DEFAULT 1,
+  treatment_ids  TEXT NOT NULL DEFAULT ''    -- comma-separated treatment ids; empty = all treatments
 );
 
 CREATE TABLE IF NOT EXISTS bookings (
@@ -42,6 +43,13 @@ CREATE TABLE IF NOT EXISTS bookings (
 -- one confirmed booking per slot, ever
 CREATE UNIQUE INDEX IF NOT EXISTS ux_bookings_active_slot
   ON bookings(date, start_min) WHERE status = 'confirmed';
+
+-- slot overrides: when rows exist for a date, ONLY those start_min values are shown publicly
+CREATE TABLE IF NOT EXISTS slot_overrides (
+  date      TEXT NOT NULL,
+  start_min INTEGER NOT NULL,
+  PRIMARY KEY (date, start_min)
+);
 CREATE INDEX IF NOT EXISTS ix_bookings_date ON bookings(date);
 
 CREATE TABLE IF NOT EXISTS blocked_dates (
