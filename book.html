@@ -176,6 +176,7 @@
     .step-dot span.lbl { display: none; }
   }
 </style>
+<script src="assets/tracking.js" defer></script>
 </head>
 <body>
 
@@ -459,6 +460,19 @@
     updateTimeSub(); renderAddons();
     show('p-time', 2);
     loadAvailability();
+    // Mid-funnel signal. Bookings alone are far too rare for Meta to optimise on
+    // (it wants ~50 events/week), so this is the higher-frequency event a campaign
+    // can actually be optimised against. No-op until a pixel id is set.
+    try {
+      if (typeof window.reviveTrack === 'function') {
+        window.reviveTrack('ViewContent', {
+          content_name: t.name,
+          content_ids: [t.id],
+          value: t.price_aud,
+          currency: 'AUD'
+        });
+      }
+    } catch (e) { /* never break the booking flow */ }
   }
 
   function loadAvailability() {
@@ -617,6 +631,19 @@
       '&location=' + encodeURIComponent('Adelaide SA');
     $('cancel-link').href = cancelUrl;
     show('p-done', null);
+    // Meta conversion. Fired AFTER the success screen is rendered so tracking can
+    // never stand between a client and her confirmation. No-op until a pixel id
+    // is set in assets/tracking.js. This is the ONLY place a booking conversion
+    // is reported from the browser - both booking paths funnel through here.
+    try {
+      if (typeof window.reviveTrack === 'function') {
+        window.reviveTrack('Schedule', {
+          content_name: b.treatment + (b.addon ? ' + ' + b.addon : ''),
+          value: (state.treatment ? state.treatment.price_aud : 0) + selPrice(),
+          currency: 'AUD'
+        }, b.id); // b.id is the dedupe key - the worker sends the same event_id
+      }
+    } catch (e) { /* never break the booking */ }
   }
 
   // Step 4: pay deposit then book

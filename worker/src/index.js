@@ -115,6 +115,77 @@ async function slotsForDate(db, dateStr, durationMin, nowAbs) {
   return slots;
 }
 
+// ---------- meta conversions api ----------
+// Server-side copy of the booking conversion. Far more reliable than the browser
+// pixel (ad blockers, iOS, closed tabs), and the worker is the only place that
+// knows for certain the booking was actually written.
+//
+// TO SWITCH ON, set both secrets:
+//   npx wrangler secret put META_PIXEL_ID
+//   npx wrangler secret put META_CAPI_TOKEN
+// Until then this is a no-op: it makes no request and logs nothing.
+//
+// Deduplication: the browser fires Schedule with eventID = booking id and this
+// sends the same event_id, so Meta counts ONE conversion, not two. If you change
+// the id on one side you must change it on the other.
+
+const META_API_VERSION = 'v21.0';
+
+async function sha256Hex(value) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Meta wants E.164 digits with country code and no punctuation or leading +.
+// Australian mobiles are stored locally as 0404 967 051 -> 61404967051.
+function normalisePhoneForMeta(phone) {
+  let d = String(phone || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('61')) return d;
+  if (d.startsWith('0')) return '61' + d.slice(1);
+  if (d.length === 9) return '61' + d;
+  return d;
+}
+
+async function metaConversion(env, { eventName, eventId, email, phone, name, value, contentName, sourceUrl, clientIp, userAgent }) {
+  if (!env.META_PIXEL_ID || !env.META_CAPI_TOKEN) return;
+
+  const userData = {};
+  const em = String(email || '').trim().toLowerCase();
+  if (em) userData.em = [await sha256Hex(em)];
+  const ph = normalisePhoneForMeta(phone);
+  if (ph) userData.ph = [await sha256Hex(ph)];
+  const first = String(name || '').trim().split(/\s+/)[0];
+  if (first) userData.fn = [await sha256Hex(first.toLowerCase())];
+  if (clientIp) userData.client_ip_address = clientIp;
+  if (userAgent) userData.client_user_agent = userAgent;
+
+  const payload = {
+    data: [{
+      event_name: eventName,
+      event_time: Math.floor(Date.now() / 1000),
+      event_id: eventId,
+      action_source: 'website',
+      event_source_url: sourceUrl || CANCEL_BASE,
+      user_data: userData,
+      custom_data: { currency: 'AUD', value: value, content_name: contentName },
+    }],
+  };
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${META_API_VERSION}/${env.META_PIXEL_ID}/events?access_token=${encodeURIComponent(env.META_CAPI_TOKEN)}`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }
+    );
+    if (!res.ok) {
+      // Loud enough to find in `wrangler tail`, never loud enough to affect a booking.
+      console.log('meta capi failed', res.status, (await res.text()).slice(0, 300));
+    }
+  } catch (e) {
+    console.log('meta capi error', String(e && e.message || e).slice(0, 200));
+  }
+}
+
 // ---------- telegram ----------
 
 async function telegram(env, text) {
@@ -490,6 +561,19 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       sendEmail(env, email, `Booking confirmed: ${what}, ${fmtDate(b.date)} ${fmtTime(startMin)} — Revive Aesthetics`,
         confirmationEmail({ name, what, dateLabel: fmtDate(b.date), timeLabel: fmtTime(startMin), duration, price, deposit: !!paymentIntentId }, cancelUrl,
           treatmentForms(t.id, id, name, phone, email))),
+      // Server-side conversion. event_id === booking id, matching the browser
+      // pixel, so Meta dedupes the pair into one conversion. No-op unless the
+      // META_PIXEL_ID + META_CAPI_TOKEN secrets are set.
+      metaConversion(env, {
+        eventName: 'Schedule',
+        eventId: id,
+        email, phone, name,
+        value: price,
+        contentName: what,
+        sourceUrl: CANCEL_BASE,
+        clientIp: req.headers.get('cf-connecting-ip') || '',
+        userAgent: req.headers.get('user-agent') || '',
+      }),
     ]));
 
     return json({
@@ -1020,6 +1104,18 @@ async function handleAdmin(req, env, url, path, cors) {
     }
     const { results } = await db.prepare('SELECT * FROM treatments WHERE id = ?').bind(b.id).all();
     return json({ ok: true, treatment: results[0] || null }, 200, cors);
+  }
+
+  // Update a booking's add-on — POST /api/admin/update-booking-addon {id, addon_ids, addon_names, end_min?}
+  if (path === '/api/admin/update-booking-addon' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    if (!b.id) return json({ error: 'missing id' }, 400, cors);
+    const row = await db.prepare("SELECT * FROM bookings WHERE id = ? AND status = 'confirmed'").bind(b.id).first();
+    if (!row) return json({ error: 'not_found' }, 404, cors);
+    await db.prepare('UPDATE bookings SET addon_ids = ?, addon_names = ?, end_min = ? WHERE id = ?')
+      .bind(String(b.addon_ids || ''), String(b.addon_names || ''), b.end_min ?? row.end_min, b.id).run();
+    const updated = await db.prepare('SELECT * FROM bookings WHERE id = ?').bind(b.id).first();
+    return json({ ok: true, booking: updated }, 200, cors);
   }
 
   if (path === '/api/admin/migrate' && req.method === 'POST') {
