@@ -367,15 +367,22 @@ function fmtMoneyCents(cents) {
   return '$' + (cents / 100).toFixed(2);
 }
 
-// The cancellation terms. ONE copy, shown on the booking page, repeated in the
-// confirmation email, and stored against the booking - an unstated term is both
-// unenforceable and unfair. Under the ACL a forfeited deposit must be a genuine
-// pre-estimate of loss, which is why it varies with notice given rather than
-// being flatly non-refundable.
+// ⚠️ THIS MUST MATCH THE PUBLISHED POLICY AT /#cancellation-policy ON THE HOMEPAGE.
+// That policy already existed and is the canonical one: 48h+ no charge, 24-48h 50%
+// of the treatment, same-day/no-show the full cost. The deposit does not replace it
+// and must not restate it more leniently - two versions of a cancellation term is
+// worse than either alone, and under the ACL an ambiguity is read against the
+// business that drafted it. The deposit is simply the part of that policy that is
+// actually collectable, since nothing else gives us money to keep.
+//
+// Under the ACL a forfeited amount must be a genuine pre-estimate of loss, which is
+// why it varies with the notice given rather than being flatly non-refundable.
 const CANCELLATION_POLICY =
   'Your deposit confirms your appointment and comes off the total on the day. ' +
-  'Move or cancel with more than 48 hours notice and it is fully transferable or refunded. ' +
-  'Inside 24 hours, or if the appointment is missed, the deposit is kept - the slot cannot be filled at that notice.';
+  'Cancel or reschedule with 48 hours notice or more and the deposit is fully refunded or moved to your new time. ' +
+  'Between 24 and 48 hours the deposit is kept toward the 50% cancellation fee. ' +
+  'For same-day cancellations and missed appointments the deposit is kept - the slot cannot be filled at that notice. ' +
+  'Full terms: ' + SITE + '/#cancellation-policy';
 
 const PREP_FORMS = {
   'lash-lift':       { prep: 'lash-prep.html',          form: 'lash-consent.html' },

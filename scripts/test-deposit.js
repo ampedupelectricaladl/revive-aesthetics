@@ -178,8 +178,42 @@ function extract(sig) {
   const chargeAt = BOOK.indexOf('confirmCardPayment');
   ok(agreeAt !== -1 && chargeAt !== -1 && agreeAt < chargeAt,
     'the agreement is checked BEFORE the card is charged');
-  ok(/48 hours/.test(BOOK) && /24 hours/.test(BOOK),
-    'the 48h / 24h policy is visible on the page');
+  ok(/48 hours/.test(BOOK) && /24 hours|24&ndash;48/.test(BOOK),
+    'the notice periods are visible on the page');
+
+  // ⚠️ THE DEPOSIT TERMS MUST NOT CONTRADICT THE PUBLISHED POLICY.
+  // index.html has carried a cancellation policy at #cancellation-policy since
+  // before the deposit existed: 48h+ no charge, 24-48h 50% of the treatment,
+  // same-day/no-show the full cost. The first version of the deposit wording
+  // omitted the 24-48h band entirely and promised something more lenient on a
+  // no-show, i.e. two different answers to the same question on one website.
+  // Under the ACL an ambiguity is read against the business that drafted it.
+  const INDEX = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const pubPolicy = INDEX.slice(INDEX.indexOf('cancellation-policy'));
+  const hasPublished = /48\+? hours/.test(pubPolicy) && /50%/.test(pubPolicy);
+  ok(hasPublished, 'the published cancellation policy is still on the homepage');
+  if (hasPublished) {
+    // Scope this to the policy paragraph itself. A bare /50%/ over the whole file
+    // passes on a CSS `width:50%` and so proves nothing - the same
+    // non-discriminating trap as the free-consultation assertion above.
+    const dp = BOOK.indexOf('id="dep-policy"');
+    const depPolicyText = dp === -1 ? '' : BOOK.slice(dp, BOOK.indexOf('</p>', dp));
+    ok(dp !== -1, 'the deposit policy block exists on the page');
+    ok(/50%/.test(depPolicyText), 'the deposit policy block acknowledges the 24-48h 50% band');
+    ok(/48 hours/.test(depPolicyText), 'the deposit policy block states the 48h band');
+    ok(/[Ss]ame day|missed appointment/.test(depPolicyText),
+      'the deposit policy block states the same-day / no-show band');
+    ok(/50%/.test(WORKER), 'the worker policy acknowledges the 24-48h 50% band');
+    ok(/#cancellation-policy/.test(BOOK),
+      'the deposit page links to the ONE canonical policy rather than restating it');
+    ok(/#cancellation-policy/.test(WORKER),
+      'the confirmation email links to the canonical policy');
+  }
+
+  // The details step already has its own required policy tick. If that is ever
+  // removed, the payment-step tick becomes the only acknowledgement - fine - but
+  // both must never disagree about what is being agreed to.
+  ok(/id="f-policy"/.test(BOOK), 'the details-step policy tick still exists');
 
   ok((BOOK.match(/[‘’“”]/g) || []).length === 0, 'no curly quotes in book.html');
 }
@@ -191,8 +225,10 @@ function extract(sig) {
   ok(/const CANCELLATION_POLICY =/.test(WORKER), 'the policy has one definition in the worker');
   ok((WORKER.match(/CANCELLATION_POLICY/g) || []).length >= 3,
     'the policy is reused (payment intent response + confirmation email), not retyped');
-  ok(/48 hours/.test(WORKER) && /24 hours/.test(WORKER),
-    'the worker policy states both notice periods');
+  ok(/48 hours notice or more/.test(WORKER), 'the worker policy states the 48h+ band');
+  ok(/[Bb]etween 24 and 48 hours/.test(WORKER), 'the worker policy states the 24-48h band');
+  ok(/same-day cancellations and missed appointments/i.test(WORKER),
+    'the worker policy states the same-day / no-show band');
   ok(!/\$25 deposit has been received/.test(WORKER),
     'the confirmation email no longer hardcodes $25');
   ok(/depositLabel/.test(WORKER) && /balanceLabel/.test(WORKER),
