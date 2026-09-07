@@ -978,7 +978,7 @@ async function handleAdmin(req, env, url, path, cors) {
     const { results } = await db.prepare(
       `SELECT b.id, b.date, b.start_min, b.end_min, b.status, b.name, b.phone, b.email, b.notes,
               b.created_at, b.addon_ids, t.name AS treatment, t.price_aud, b.addon_names AS addon,
-              b.price_override, b.deposit_paid
+              b.price_override, b.deposit_paid, b.deposit_cents, b.stripe_payment_intent_id
        FROM bookings b JOIN treatments t ON t.id = b.treatment_id
        WHERE b.date BETWEEN ? AND ? ORDER BY b.date, b.start_min`
     ).bind(from, to).all();
@@ -988,6 +988,14 @@ async function handleAdmin(req, env, url, path, cors) {
         ...r, addon_ids: undefined, price_override: undefined,
         price_aud: Number.isFinite(r.price_override) ? r.price_override : priceOf(r),
         deposit_paid: r.deposit_paid === 1,
+        // Stefani needs the AMOUNT, not just a yes/no. When she cancels someone
+        // inside the 48h window she has to refund exactly what was taken, and
+        // "a deposit was paid" alone means refunding blind. The payment id is
+        // included so she can find the charge in Stripe without searching by name.
+        deposit_label: r.deposit_cents ? fmtMoneyCents(r.deposit_cents) : '',
+        deposit_cents: r.deposit_cents || 0,
+        stripe_payment_intent_id: undefined,
+        stripe_ref: r.stripe_payment_intent_id || '',
         time_label: fmtTime(r.start_min), date_label: fmtDate(r.date),
       })),
     }, 200, cors);
