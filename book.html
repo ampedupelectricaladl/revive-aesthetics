@@ -285,15 +285,23 @@
     <!-- step 4: deposit -->
     <div class="panel" id="p-deposit">
       <h2>Secure your spot</h2>
-      <p class="sub">A $25 deposit is required to confirm your booking. It will be deducted from your total on the day.</p>
+      <p class="sub">A 30% deposit confirms your appointment. It comes off your total on the day.</p>
       <div class="summary">
         <span class="what" id="dep-what"></span>
         <span class="when" id="dep-when"></span>
       </div>
       <div style="background:var(--cream-card);border-radius:12px;padding:24px;margin:20px 0;">
-        <p style="font-family:var(--sans);font-size:14px;color:var(--muted);margin-bottom:14px;letter-spacing:.03em;">DEPOSIT AMOUNT</p>
-        <p style="font-family:'Cormorant Garamond',serif;font-size:32px;color:var(--plum);font-weight:500;">$25.00</p>
+        <p style="font-family:var(--sans);font-size:14px;color:var(--muted);margin-bottom:14px;letter-spacing:.03em;">DEPOSIT DUE NOW</p>
+        <p style="font-family:'Cormorant Garamond',serif;font-size:32px;color:var(--plum);font-weight:500;" id="dep-amount">&mdash;</p>
+        <p style="font-family:var(--sans);font-size:12px;color:var(--muted);margin-top:4px;" id="dep-balance"></p>
         <p style="font-family:var(--sans);font-size:12px;color:var(--muted);margin-top:4px;">Secure online payment via Stripe</p>
+      </div>
+      <div style="border-left:3px solid var(--gold);padding:12px 14px;margin:0 0 20px;background:rgba(194,168,120,.08);">
+        <p style="font-family:var(--sans);font-size:13px;line-height:1.65;color:var(--muted);" id="dep-policy">
+          Move or cancel with more than <strong>48 hours' notice</strong> and your deposit is fully
+          transferable to another time, or refunded. Inside <strong>24 hours</strong>, or if the
+          appointment is missed, the deposit is kept &mdash; the slot can't be filled at that notice.
+        </p>
       </div>
       <form id="dep-form">
         <div class="field" style="margin-bottom:18px;">
@@ -301,8 +309,14 @@
           <div id="dep-card-element" style="background:var(--cream-card);border:1px solid rgba(43,15,26,.18);border-radius:8px;padding:14px 12px;"></div>
           <div id="dep-card-errors" class="msg err" style="margin-top:8px;display:none;"></div>
         </div>
+        <div class="field" style="margin-bottom:18px;">
+          <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;font-family:var(--sans);font-size:13px;line-height:1.6;color:var(--plum);">
+            <input type="checkbox" id="dep-agree" style="margin-top:3px;flex:0 0 auto;" />
+            <span>I've read and agree to the deposit and cancellation terms above.</span>
+          </label>
+        </div>
         <div class="msg err" id="dep-msg"></div>
-        <button type="submit" class="btn" id="dep-btn">Pay $25 Deposit &amp; Confirm</button>
+        <button type="submit" class="btn" id="dep-btn">Pay Deposit &amp; Confirm</button>
       </form>
       <div class="nav-row"><button class="btn-link" id="dep-back">&larr; Edit details</button><span></span></div>
     </div>
@@ -362,6 +376,15 @@
   function selDur() { return state.sel.reduce(function (s, a) { return s + a.duration_min; }, 0); }
   function selPrice() { return state.sel.reduce(function (s, a) { return s + a.price_aud; }, 0); }
   function selNames() { return state.sel.map(function (a) { return a.name; }).join(' + '); }
+  // Deliberately only asks "is anything payable", NOT "how much is the deposit".
+  // The 30% rule and the $50 cap live in the worker and nowhere else; the figure
+  // shown to the client is the one the server sends back with the PaymentIntent.
+  // Two copies of a money rule is how the amount charged and the amount checked
+  // drift apart.
+  function hasDeposit() {
+    return ((state.treatment ? state.treatment.price_aud : 0) + selPrice()) > 0;
+  }
+  function money(cents) { return '$' + (cents / 100).toFixed(2); }
   document.getElementById('yr').textContent = new Date().getFullYear();
 
   function $(id) { return document.getElementById(id); }
@@ -549,7 +572,11 @@
     $('time-wrap').style.display = 'block';
   }
 
-  // Step 3 submit -- book directly (deposit step bypassed)
+  // Step 3 submit. A paid treatment goes to the deposit step; a $0 treatment
+  // (the free consultation) books straight through, since there is nothing to
+  // take 30% of. The server enforces this either way - it returns
+  // `deposit_required` if a paid booking arrives with no payment intent - so this
+  // branch is only about not showing a client an empty payment form.
   $('book-form').addEventListener('submit', function (e) {
     e.preventDefault();
     $('book-msg').textContent = '';
@@ -561,6 +588,7 @@
       email: $('f-email').value, notes: $('f-notes').value,
       website: $('f-website').value,
     };
+    if (hasDeposit()) { goToDeposit(); return; }
     api('/api/book', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify(state.formData),
@@ -607,10 +635,15 @@
         else { el.textContent = ''; el.style.display = 'none'; }
       });
     }
-    // Create PaymentIntent on the server
+    // Create PaymentIntent on the server. The treatment + add-ons are sent so the
+    // WORKER can price it; the amount is never sent from here.
     api('/api/create-payment-intent', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: state.formData.name }),
+      body: JSON.stringify({
+        name: state.formData.name,
+        treatment: state.formData.treatment,
+        addons: state.formData.addons,
+      }),
     }).then(function (r) {
       btn.disabled = false; btn.textContent = 'Continue to Deposit →';
       if (!r.ok) {
@@ -618,8 +651,14 @@
         return;
       }
       state.clientSecret = r.data.client_secret;
-      // Update dep-when properly now we have the time label
+      // Display the SERVER's figure, never a locally recalculated one.
+      state.depositCents = r.data.deposit_cents || 0;
       var price = state.treatment.price_aud + selPrice();
+      $('dep-amount').textContent = money(state.depositCents);
+      $('dep-balance').textContent = money(price * 100 - state.depositCents) + ' due on the day (total $' + price + ')';
+      $('dep-btn').textContent = 'Pay ' + money(state.depositCents) + ' Deposit & Confirm';
+      $('dep-agree').checked = false;
+      $('dep-msg').textContent = '';
       $('dep-when').textContent = f.dow + ' ' + f.day + ' · ' + state.timeLabel + (price > 0 ? ' · $' + price : '');
       show('p-deposit', 4);
     }).catch(function () {
@@ -668,13 +707,20 @@
   // Step 4: pay deposit then book
   $('dep-form').addEventListener('submit', function (e) {
     e.preventDefault();
+    var payLabel = 'Pay ' + money(state.depositCents || 0) + ' Deposit & Confirm';
+    // The terms must be actively agreed to before any card is charged. An
+    // unacknowledged term is both unenforceable and unfair.
+    if (!$('dep-agree').checked) {
+      $('dep-msg').textContent = 'Please tick to agree to the deposit and cancellation terms.';
+      return;
+    }
     var btn = $('dep-btn'); btn.disabled = true; btn.textContent = 'Processing...';
     $('dep-msg').textContent = '';
     state.stripe.confirmCardPayment(state.clientSecret, {
       payment_method: { card: state.cardElement },
     }).then(function (result) {
       if (result.error) {
-        btn.disabled = false; btn.textContent = 'Pay $25 Deposit & Confirm';
+        btn.disabled = false; btn.textContent = payLabel;
         $('dep-msg').textContent = result.error.message || 'Payment failed -- please try again.';
         return;
       }
@@ -685,7 +731,7 @@
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       }).then(function (r) {
-        btn.disabled = false; btn.textContent = 'Pay $25 Deposit & Confirm';
+        btn.disabled = false; btn.textContent = payLabel;
         if (!r.ok) {
           var errs = {
             slot_unavailable: 'That time was just taken -- your card has not been charged. Please pick another time.',
@@ -698,7 +744,7 @@
         }
         showBookingSuccess(r.data, paymentIntentId);
       }).catch(function () {
-        btn.disabled = false; btn.textContent = 'Pay $25 Deposit & Confirm';
+        btn.disabled = false; btn.textContent = payLabel;
         $('dep-msg').textContent = 'Booking could not be confirmed after payment -- please call 0404 967 051 immediately.';
       });
     });

@@ -294,8 +294,11 @@ function confirmationEmail(b, cancelUrl, forms) {
     </p>
     <p style="line-height:1.6;font-size:12px;color:#6f5b58;text-align:center;">Takes about 2 minutes · kept completely private</p>`;
   }
+  // The policy is repeated here on purpose. A term the client only saw once at
+  // checkout is far weaker than one confirmed in writing, and this is the copy
+  // she will still have in her inbox if she needs to move the appointment.
   const depositNote = b.deposit
-    ? `<p style="line-height:1.7;font-size:13px;background:#f9f4ec;border-left:3px solid #c2a878;padding:10px 14px;margin:16px 0 0;">💳 Your $25 deposit has been received and will be deducted from your total on the day.</p>`
+    ? `<p style="line-height:1.7;font-size:13px;background:#f9f4ec;border-left:3px solid #c2a878;padding:10px 14px;margin:16px 0 0;">💳 Your ${b.depositLabel || 'deposit'} has been received${b.balanceLabel ? `, with ${b.balanceLabel} due on the day` : ''}.<br><span style="color:#6f5b58;">${CANCELLATION_POLICY}</span></p>`
     : '';
   return emailShell(`You're booked in, ${b.name.split(' ')[0]}`,
     `<p style="line-height:1.7;margin:0;">${b.intro || 'Thank you for booking with Revive Aesthetics — here are your appointment details:'}</p>
@@ -336,7 +339,43 @@ function isoToAdelaideAbs(iso) {
 
 const CANCEL_BASE = 'https://reviveaestheticsadl.com.au/book.html';
 const SITE = 'https://reviveaestheticsadl.com.au';
-const DEPOSIT_CENTS = 2500; // $25.00 AUD
+// ---------- deposit ----------
+// 30% of the treatment total, capped at $50. The cap exists because 30% of the
+// $299 microneedling is $90, which is a heavy ask from a first-time client; the
+// cap keeps a lash lift at $28.50 without the expensive treatment scaring people
+// off. A $0 treatment (the free consultation) takes NO deposit.
+//
+// ⚠️ THESE TWO FUNCTIONS ARE THE ONLY DEFINITION OF WHAT A DEPOSIT COSTS.
+// Both /api/create-payment-intent and the /api/book verification call them, so
+// the amount charged and the amount checked can never drift apart. The price is
+// always read from the D1 treatment/addon rows - NEVER from the request body.
+// If the browser could name the amount, a client could pay $1 and pass the check.
+const DEPOSIT_PCT = 30;
+const DEPOSIT_CAP_CENTS = 5000; // $50.00 AUD
+
+function totalPriceAud(treatment, addons) {
+  return (treatment?.price_aud || 0) + (addons || []).reduce((s, a) => s + (a.price_aud || 0), 0);
+}
+
+function depositCentsFor(priceAud) {
+  const p = Number(priceAud);
+  if (!Number.isFinite(p) || p <= 0) return 0;
+  return Math.min(Math.round(p * 100 * (DEPOSIT_PCT / 100)), DEPOSIT_CAP_CENTS);
+}
+
+function fmtMoneyCents(cents) {
+  return '$' + (cents / 100).toFixed(2);
+}
+
+// The cancellation terms. ONE copy, shown on the booking page, repeated in the
+// confirmation email, and stored against the booking - an unstated term is both
+// unenforceable and unfair. Under the ACL a forfeited deposit must be a genuine
+// pre-estimate of loss, which is why it varies with notice given rather than
+// being flatly non-refundable.
+const CANCELLATION_POLICY =
+  'Your deposit confirms your appointment and comes off the total on the day. ' +
+  'Move or cancel with more than 48 hours notice and it is fully transferable or refunded. ' +
+  'Inside 24 hours, or if the appointment is missed, the deposit is kept - the slot cannot be filled at that notice.';
 
 const PREP_FORMS = {
   'lash-lift':       { prep: 'lash-prep.html',          form: 'lash-consent.html' },
@@ -468,8 +507,19 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     if (!env.STRIPE_SECRET_KEY) return json({ error: 'payments_unavailable' }, 503, cors);
     const body = await req.json().catch(() => ({}));
     const name = String(body.name || '').trim().slice(0, 120);
+
+    // Price the booking from D1, never from the request. The client chooses WHICH
+    // treatment and add-ons; the server alone decides what that costs.
+    const dt = await db.prepare('SELECT * FROM treatments WHERE id = ? AND active = 1')
+      .bind(body.treatment).first();
+    if (!dt) return json({ error: 'unknown_treatment' }, 400, cors);
+    const dAddons = await lookupAddons(db, body.addons ?? body.addon);
+    if (dAddons === undefined) return json({ error: 'unknown_addon' }, 400, cors);
+    const depositCents = depositCentsFor(totalPriceAud(dt, dAddons));
+    if (depositCents <= 0) return json({ error: 'no_deposit_required', deposit_cents: 0 }, 400, cors);
+
     const params = new URLSearchParams();
-    params.set('amount', String(DEPOSIT_CENTS));
+    params.set('amount', String(depositCents));
     params.set('currency', 'aud');
     params.append('payment_method_types[]', 'card');
     if (name) params.set('description', `Revive Aesthetics booking deposit — ${name}`);
@@ -483,7 +533,9 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     });
     const pi = await r.json();
     if (!r.ok) return json({ error: 'stripe_error', detail: pi.error?.message }, 502, cors);
-    return json({ client_secret: pi.client_secret }, 200, cors);
+    // deposit_cents is returned so the page can DISPLAY the figure. It is never
+    // read back as an input - /api/book recomputes it from D1 either way.
+    return json({ client_secret: pi.client_secret, deposit_cents: depositCents, policy: CANCELLATION_POLICY }, 200, cors);
   }
 
   if (path === '/api/book' && req.method === 'POST') {
@@ -519,29 +571,42 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     ).bind(now.date, phone, email || ' ').first();
     if (dup.n >= 2) return json({ error: 'too_many_bookings' }, 429, cors);
 
-    // Stripe deposit — optional (verify only when a payment_intent_id is supplied)
+    // Stripe deposit. The expected amount is recomputed HERE from the treatment
+    // and add-on rows already looked up above - the request body cannot influence
+    // it. `price` is the server's own figure, so depositCents is too.
+    const depositCents = depositCentsFor(price);
     let paymentIntentId = '';
+    let depositPaidCents = 0;
     const pid = String(b.payment_intent_id || '').trim();
+
+    if (depositCents > 0 && env.STRIPE_SECRET_KEY && !pid) {
+      // A deposit is owed and payments are working, so the booking is not valid
+      // without one. Without this a client could POST straight to /api/book and
+      // skip the payment step entirely.
+      return json({ error: 'deposit_required', deposit_cents: depositCents }, 402, cors);
+    }
+
     if (pid && env.STRIPE_SECRET_KEY) {
       const sr = await fetch(`https://api.stripe.com/v1/payment_intents/${encodeURIComponent(pid)}`, {
         headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
       });
       const pi = await sr.json();
-      if (!sr.ok || pi.status !== 'succeeded' || pi.amount !== DEPOSIT_CENTS || pi.currency !== 'aud') {
+      if (!sr.ok || pi.status !== 'succeeded' || pi.amount !== depositCents || pi.currency !== 'aud') {
         return json({ error: 'deposit_unverified' }, 402, cors);
       }
       paymentIntentId = pid;
+      depositPaidCents = pi.amount;
     }
 
     const id = crypto.randomUUID().slice(0, 8);
     const cancelToken = crypto.randomUUID();
     try {
       await db.prepare(
-        `INSERT INTO bookings (id, treatment_id, addon_ids, addon_names, date, start_min, end_min, name, phone, email, notes, cancel_token, created_at, stripe_payment_intent_id, deposit_paid)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO bookings (id, treatment_id, addon_ids, addon_names, date, start_min, end_min, name, phone, email, notes, cancel_token, created_at, stripe_payment_intent_id, deposit_paid, deposit_cents)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).bind(id, t.id, addons.map(a => a.id).join(','), addonNames, b.date, startMin, startMin + duration,
              name, phone, email, notes, cancelToken, new Date().toISOString(),
-             paymentIntentId, paymentIntentId ? 1 : 0).run();
+             paymentIntentId, paymentIntentId ? 1 : 0, depositPaidCents).run();
     } catch (e) {
       if (String(e.message || e).includes('UNIQUE')) return json({ error: 'slot_unavailable' }, 409, cors);
       throw e;
@@ -555,11 +620,14 @@ async function handlePublic(req, env, ctx, url, path, cors) {
         `${what} — ${fmtDate(b.date)}, ${fmtTime(startMin)} (${duration} min · $${price})\n` +
         `${name} · ${phone}${email ? ' · ' + email : ''}` +
         (notes ? `\nNotes: ${notes}` : '') +
-        (paymentIntentId ? '\n💳 $25 deposit paid' : '') +
+        (paymentIntentId ? `\n💳 ${fmtMoneyCents(depositPaidCents)} deposit paid · ${fmtMoneyCents(price * 100 - depositPaidCents)} due on the day` : '') +
         `\nRef ${id}`
       ),
       sendEmail(env, email, `Booking confirmed: ${what}, ${fmtDate(b.date)} ${fmtTime(startMin)} — Revive Aesthetics`,
-        confirmationEmail({ name, what, dateLabel: fmtDate(b.date), timeLabel: fmtTime(startMin), duration, price, deposit: !!paymentIntentId }, cancelUrl,
+        confirmationEmail({ name, what, dateLabel: fmtDate(b.date), timeLabel: fmtTime(startMin), duration, price,
+          deposit: !!paymentIntentId,
+          depositLabel: depositPaidCents ? `${fmtMoneyCents(depositPaidCents)} deposit` : '',
+          balanceLabel: depositPaidCents ? fmtMoneyCents(price * 100 - depositPaidCents) : '' }, cancelUrl,
           treatmentForms(t.id, id, name, phone, email))),
       // Server-side conversion. event_id === booking id, matching the browser
       // pixel, so Meta dedupes the pair into one conversion. No-op unless the
@@ -1125,6 +1193,11 @@ async function handleAdmin(req, env, url, path, cors) {
     // Stripe deposit columns — added 2026-08-26; safe to run repeatedly
     await db.exec(`ALTER TABLE bookings ADD COLUMN stripe_payment_intent_id TEXT`).catch(() => {});
     await db.exec(`ALTER TABLE bookings ADD COLUMN deposit_paid INTEGER DEFAULT 0`).catch(() => {});
+    // How much was actually taken, in cents — added 2026-09-06 with the 30% deposit.
+    // deposit_paid stays a 0/1 flag; this is the amount, needed to refund correctly.
+    // ⚠️ RUN MIGRATE BEFORE DEPLOYING the code that writes this column, or every
+    // INSERT fails on "no such column" and bookings stop working entirely.
+    await db.exec(`ALTER TABLE bookings ADD COLUMN deposit_cents INTEGER DEFAULT 0`).catch(() => {});
     // treatment_ids on addons — added 2026-09-01; empty string = applies to all treatments
     await db.exec(`ALTER TABLE addons ADD COLUMN treatment_ids TEXT NOT NULL DEFAULT ''`).catch(() => {});
     return json({ ok: true }, 200, cors);
