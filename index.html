@@ -390,6 +390,14 @@
   .faq-item[open] summary::after { content: "\2212"; }
   .faq-a { padding: 0 40px 26px 0; }
   .faq-a p { color: var(--muted); font-size: 0.98rem; }
+  .policy-section { background: var(--cream-card); }
+  .policy-body { max-width: 760px; margin: 0 auto; }
+  .policy-rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; margin-bottom: 40px; }
+  .policy-rule { background: var(--cream-bg); border: 1px solid rgba(43,15,26,0.08); border-radius: 12px; padding: 28px; }
+  .rule-label { font-family: 'Cormorant Garamond', serif; font-size: 1.2rem; font-weight: 600; color: var(--plum); margin-bottom: 10px; }
+  .policy-rule p:last-child { color: var(--muted); font-size: 0.95rem; line-height: 1.6; margin: 0; }
+  .policy-contact { text-align: center; color: var(--muted); font-size: 0.95rem; line-height: 1.7; }
+  .policy-contact a { color: var(--plum); text-decoration: underline; text-underline-offset: 3px; }
 
   /* signature in About */
   .signature {
@@ -852,6 +860,39 @@
         <summary>How often should I have a treatment?</summary>
         <div class="faq-a"><p>It depends on your skin and your goals, but most clients see the best results from a short course of treatments spaced a few weeks apart. Your therapist will map out a plan tailored to you at your consultation.</p></div>
       </details>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== CANCELLATION POLICY ===================== -->
+<section class="policy-section" id="cancellation-policy">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="divider"></div>
+      <p class="eyebrow">Bookings</p>
+      <h2>Cancellation policy</h2>
+      <p>We reserve your appointment time exclusively for you. To respect everyone's schedule, we ask for a little notice if plans change.</p>
+    </div>
+    <div class="policy-body">
+      <div class="policy-rules">
+        <div class="policy-rule">
+          <p class="rule-label">24 hours&rsquo; notice</p>
+          <p>Cancellations or rescheduling with at least 24 hours&rsquo; notice are always welcome &mdash; no charge, no fuss.</p>
+        </div>
+        <div class="policy-rule">
+          <p class="rule-label">Under 24 hours</p>
+          <p>Cancellations within 24 hours of your appointment will incur a fee of 50% of the treatment cost.</p>
+        </div>
+        <div class="policy-rule">
+          <p class="rule-label">No-shows</p>
+          <p>If you don&rsquo;t attend without notice, the full treatment cost will be charged.</p>
+        </div>
+        <div class="policy-rule">
+          <p class="rule-label">Late arrivals</p>
+          <p>Arriving 15 or more minutes late may result in a shortened treatment or rescheduling &mdash; the full fee still applies.</p>
+        </div>
+      </div>
+      <p class="policy-contact">To cancel or reschedule, reach us on Instagram <a href="https://www.instagram.com/reviveaesthetics.adl">@reviveaesthetics.adl</a>, by phone at <a href="tel:0404967051">0404&nbsp;967&nbsp;051</a>, or through your booking confirmation link.</p>
     </div>
   </div>
 </section>

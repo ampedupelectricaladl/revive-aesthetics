@@ -151,6 +151,10 @@
   input:focus, textarea:focus { outline: none; border-color: var(--plum); }
   textarea { resize: vertical; min-height: 90px; }
   .hp { position: absolute; left: -9999px; opacity: 0; height: 0; overflow: hidden; }
+  .policy-agree { margin: 18px 0 14px; }
+  .policy-agree-label { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-family: var(--sans); font-size: 0.88rem; color: var(--muted); line-height: 1.5; }
+  .policy-agree-label input[type=checkbox] { flex-shrink: 0; margin-top: 2px; accent-color: var(--plum); width: 15px; height: 15px; cursor: pointer; }
+  .policy-agree-label a { color: var(--plum); text-underline-offset: 2px; }
 
   .msg { text-align: center; padding: 12px; font-size: 0.9rem; }
   .msg.err { color: #8c2f39; }
@@ -267,6 +271,12 @@
           <textarea id="f-notes" placeholder="Skin concerns, first visit, current products..."></textarea></div>
         <div class="hp"><label>Website</label><input id="f-website" tabindex="-1" autocomplete="off" /></div>
         <div class="msg err" id="book-msg"></div>
+        <div class="policy-agree">
+          <label class="policy-agree-label">
+            <input type="checkbox" id="f-policy" required />
+            <span>I have read and agree to the <a href="/#cancellation-policy" target="_blank" rel="noopener">cancellation policy</a></span>
+          </label>
+        </div>
         <button type="submit" class="btn" id="book-btn">Confirm Booking &rarr;</button>
       </form>
       <div class="nav-row"><button class="btn-link" data-back="2">&larr; Change time</button><span></span></div>
