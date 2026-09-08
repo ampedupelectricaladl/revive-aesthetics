@@ -351,15 +351,19 @@ function isoToAdelaideAbs(iso) {
 
 const CANCEL_BASE = 'https://reviveaestheticsadl.com.au/book.html';
 const SITE = 'https://reviveaestheticsadl.com.au';
-// ---------- full payment at booking ----------
-// The full treatment price is charged upfront. A $0 treatment (the free
-// consultation) takes no payment.
+// ---------- deposit ----------
+// 30% of the treatment total, capped at $50. The cap exists because 30% of the
+// $299 microneedling is $90, which is a heavy ask from a first-time client; the
+// cap keeps a lash lift at $28.50 without the expensive treatment scaring people
+// off. A $0 treatment (the free consultation) takes NO deposit.
 //
-// ⚠️ THESE TWO FUNCTIONS ARE THE ONLY DEFINITION OF WHAT IS CHARGED.
+// ⚠️ THESE TWO FUNCTIONS ARE THE ONLY DEFINITION OF WHAT A DEPOSIT COSTS.
 // Both /api/create-payment-intent and the /api/book verification call them, so
 // the amount charged and the amount checked can never drift apart. The price is
 // always read from the D1 treatment/addon rows - NEVER from the request body.
 // If the browser could name the amount, a client could pay $1 and pass the check.
+const DEPOSIT_PCT = 30;
+const DEPOSIT_CAP_CENTS = 5000; // $50.00 AUD
 
 function totalPriceAud(treatment, addons) {
   return (treatment?.price_aud || 0) + (addons || []).reduce((s, a) => s + (a.price_aud || 0), 0);
@@ -368,7 +372,7 @@ function totalPriceAud(treatment, addons) {
 function depositCentsFor(priceAud) {
   const p = Number(priceAud);
   if (!Number.isFinite(p) || p <= 0) return 0;
-  return Math.round(p * 100); // full price in cents
+  return Math.min(Math.round(p * 100 * (DEPOSIT_PCT / 100)), DEPOSIT_CAP_CENTS);
 }
 
 function fmtMoneyCents(cents) {
@@ -386,10 +390,10 @@ function fmtMoneyCents(cents) {
 // Under the ACL a forfeited amount must be a genuine pre-estimate of loss, which is
 // why it varies with the notice given rather than being flatly non-refundable.
 const CANCELLATION_POLICY =
-  'Your full payment secures your appointment. ' +
-  'Cancel or reschedule with 48 hours notice or more and your payment is fully refunded or moved to your new time. ' +
-  'Between 24 and 48 hours, 50% of your payment is refunded. ' +
-  'For same-day cancellations and missed appointments your payment is kept - the slot cannot be filled at that notice. ' +
+  'Your deposit confirms your appointment and comes off the total on the day. ' +
+  'Cancel or reschedule with 48 hours notice or more and the deposit is fully refunded or moved to your new time. ' +
+  'Between 24 and 48 hours the deposit is kept toward the 50% cancellation fee. ' +
+  'For same-day cancellations and missed appointments the deposit is kept - the slot cannot be filled at that notice. ' +
   'Full terms: ' + SITE + '/#cancellation-policy';
 
 const PREP_FORMS = {
@@ -648,14 +652,14 @@ async function handlePublic(req, env, ctx, url, path, cors) {
         `${what} — ${fmtDate(b.date)}, ${fmtTime(startMin)} (${duration} min · $${price})\n` +
         `${name} · ${phone}${email ? ' · ' + email : ''}` +
         (notes ? `\nNotes: ${notes}` : '') +
-        (paymentIntentId ? `\n💳 ${fmtMoneyCents(depositPaidCents)} paid in full` : '') +
+        (paymentIntentId ? `\n💳 ${fmtMoneyCents(depositPaidCents)} deposit paid · ${fmtMoneyCents(price * 100 - depositPaidCents)} due on the day` : '') +
         `\nRef ${id}`
       ),
       sendEmail(env, email, `Booking confirmed: ${what}, ${fmtDate(b.date)} ${fmtTime(startMin)} — Revive Aesthetics`,
         confirmationEmail({ name, what, dateLabel: fmtDate(b.date), timeLabel: fmtTime(startMin), duration, price,
           deposit: !!paymentIntentId,
-          depositLabel: depositPaidCents ? `full payment of ${fmtMoneyCents(depositPaidCents)}` : '',
-          balanceLabel: '' }, cancelUrl,
+          depositLabel: depositPaidCents ? `${fmtMoneyCents(depositPaidCents)} deposit` : '',
+          balanceLabel: depositPaidCents ? fmtMoneyCents(price * 100 - depositPaidCents) : '' }, cancelUrl,
           treatmentForms(t.id, id, name, phone, email))),
       // Server-side conversion. event_id === booking id, matching the browser
       // pixel, so Meta dedupes the pair into one conversion. No-op unless the

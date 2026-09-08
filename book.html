@@ -285,22 +285,22 @@
     <!-- step 4: deposit -->
     <div class="panel" id="p-deposit">
       <h2>Secure your spot</h2>
-      <p class="sub">Full payment is taken upfront to secure your spot. Nothing extra is due on the day.</p>
+      <p class="sub">A 30% deposit confirms your appointment. It comes off your total on the day.</p>
       <div class="summary">
         <span class="what" id="dep-what"></span>
         <span class="when" id="dep-when"></span>
       </div>
       <div style="background:var(--cream-card);border-radius:12px;padding:24px;margin:20px 0;">
-        <p style="font-family:var(--sans);font-size:14px;color:var(--muted);margin-bottom:14px;letter-spacing:.03em;">TOTAL DUE NOW</p>
+        <p style="font-family:var(--sans);font-size:14px;color:var(--muted);margin-bottom:14px;letter-spacing:.03em;">DEPOSIT DUE NOW</p>
         <p style="font-family:'Cormorant Garamond',serif;font-size:32px;color:var(--plum);font-weight:500;" id="dep-amount">&mdash;</p>
-        <p style="font-family:var(--sans);font-size:12px;color:var(--muted);margin-top:4px;" id="dep-balance" hidden></p>
+        <p style="font-family:var(--sans);font-size:12px;color:var(--muted);margin-top:4px;" id="dep-balance"></p>
         <p style="font-family:var(--sans);font-size:12px;color:var(--muted);margin-top:4px;">Secure online payment via Stripe</p>
       </div>
       <div style="border-left:3px solid var(--gold);padding:12px 14px;margin:0 0 20px;background:rgba(194,168,120,.08);">
         <p style="font-family:var(--sans);font-size:13px;line-height:1.65;color:var(--muted);" id="dep-policy">
-          <strong>48 hours' notice or more</strong> &mdash; fully refunded, or moved to your new
-          time. <strong>24&ndash;48 hours</strong> &mdash; 50% is refunded.
-          <strong>Same day or a missed appointment</strong> &mdash; payment is kept; the slot can't be
+          <strong>48 hours' notice or more</strong> &mdash; deposit fully refunded, or moved to your new
+          time. <strong>24&ndash;48 hours</strong> &mdash; deposit is kept toward the 50% cancellation fee.
+          <strong>Same day or a missed appointment</strong> &mdash; deposit is kept; the slot can't be
           filled at that notice.
           <a href="/#cancellation-policy" target="_blank" rel="noopener" style="color:var(--plum);text-decoration:underline;">Full cancellation policy</a>
         </p>
@@ -314,11 +314,11 @@
         <div class="field" style="margin-bottom:18px;">
           <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;font-family:var(--sans);font-size:13px;line-height:1.6;color:var(--plum);">
             <input type="checkbox" id="dep-agree" style="margin-top:3px;flex:0 0 auto;" />
-            <span>I understand my payment is non-refundable if I cancel inside 24 hours or miss my appointment.</span>
+            <span>I understand the deposit is kept if I cancel inside 24 hours or miss my appointment.</span>
           </label>
         </div>
         <div class="msg err" id="dep-msg"></div>
-        <button type="submit" class="btn" id="dep-btn">Pay &amp; Confirm Booking</button>
+        <button type="submit" class="btn" id="dep-btn">Pay Deposit &amp; Confirm</button>
       </form>
       <div class="nav-row"><button class="btn-link" id="dep-back">&larr; Edit details</button><span></span></div>
     </div>
@@ -647,7 +647,7 @@
         addons: state.formData.addons,
       }),
     }).then(function (r) {
-      btn.disabled = false; btn.textContent = 'Continue to Payment →';
+      btn.disabled = false; btn.textContent = 'Continue to Deposit →';
       if (!r.ok) {
         $('book-msg').textContent = 'Could not start payment -- please try again or call 0404 967 051.';
         return;
@@ -655,8 +655,10 @@
       state.clientSecret = r.data.client_secret;
       // Display the SERVER's figure, never a locally recalculated one.
       state.depositCents = r.data.deposit_cents || 0;
+      var price = state.treatment.price_aud + selPrice();
       $('dep-amount').textContent = money(state.depositCents);
-      $('dep-btn').textContent = 'Pay ' + money(state.depositCents) + ' & Confirm Booking';
+      $('dep-balance').textContent = money(price * 100 - state.depositCents) + ' due on the day (total $' + price + ')';
+      $('dep-btn').textContent = 'Pay ' + money(state.depositCents) + ' Deposit & Confirm';
       $('dep-agree').checked = false;
       $('dep-msg').textContent = '';
       $('dep-when').textContent = f.dow + ' ' + f.day + ' · ' + state.timeLabel + (price > 0 ? ' · $' + price : '');
@@ -707,7 +709,7 @@
   // Step 4: pay deposit then book
   $('dep-form').addEventListener('submit', function (e) {
     e.preventDefault();
-    var payLabel = 'Pay ' + money(state.depositCents || 0) + ' & Confirm Booking';
+    var payLabel = 'Pay ' + money(state.depositCents || 0) + ' Deposit & Confirm';
     // The terms must be actively agreed to before any card is charged. An
     // unacknowledged term is both unenforceable and unfair.
     if (!$('dep-agree').checked) {
