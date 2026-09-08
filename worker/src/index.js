@@ -26,6 +26,8 @@
  *   POST /api/admin/set-allowed-slots {date,slots:[start_min,...]}  (pin exact public slots for a date)
  *   POST /api/admin/clear-allowed-slots {date}  (restore normal availability for a date)
  *   POST /api/admin/migrate  (idempotent: create any missing tables)
+ *   GET  /api/admin/client-flags               (list phones flagged as requiring deposit)
+ *   POST /api/admin/flag-client {phone, require_deposit, note?}  (flag/unflag a client)
  */
 
 const TZ = 'Australia/Adelaide';
@@ -106,11 +108,21 @@ async function slotsForDate(db, dateStr, durationMin, nowAbs) {
   } catch (_) { /* table not yet migrated — treat as no overrides */ }
 
   const slots = [];
-  for (let t = OPEN_MIN; t + durationMin <= CLOSE_MIN; t += GRID_MIN) {
-    if (absMin(dateStr, t) < nowAbs + MIN_NOTICE_MIN) continue;
-    if (allowedSet && !allowedSet.has(t)) continue;
-    const clash = taken.some(b => t < b.end_min + BUFFER_MIN && b.start_min < t + durationMin + BUFFER_MIN);
-    if (!clash) slots.push(t);
+  if (allowedSet) {
+    // Admin has pinned exact slots for this date — iterate those directly,
+    // honouring off-grid times and late starts without enforcing CLOSE_MIN.
+    // No minimum notice: if Stefani pinned a slot, it's intentionally bookable now.
+    for (const t of [...allowedSet].sort((a, b) => a - b)) {
+      if (absMin(dateStr, t) < nowAbs) continue;  // only skip slots already past
+      const clash = taken.some(b => t < b.end_min + BUFFER_MIN && b.start_min < t + durationMin + BUFFER_MIN);
+      if (!clash) slots.push(t);
+    }
+  } else {
+    for (let t = OPEN_MIN; t + durationMin <= CLOSE_MIN; t += GRID_MIN) {
+      if (absMin(dateStr, t) < nowAbs + MIN_NOTICE_MIN) continue;
+      const clash = taken.some(b => t < b.end_min + BUFFER_MIN && b.start_min < t + durationMin + BUFFER_MIN);
+      if (!clash) slots.push(t);
+    }
   }
   return slots;
 }
@@ -339,19 +351,15 @@ function isoToAdelaideAbs(iso) {
 
 const CANCEL_BASE = 'https://reviveaestheticsadl.com.au/book.html';
 const SITE = 'https://reviveaestheticsadl.com.au';
-// ---------- deposit ----------
-// 30% of the treatment total, capped at $50. The cap exists because 30% of the
-// $299 microneedling is $90, which is a heavy ask from a first-time client; the
-// cap keeps a lash lift at $28.50 without the expensive treatment scaring people
-// off. A $0 treatment (the free consultation) takes NO deposit.
+// ---------- full payment at booking ----------
+// The full treatment price is charged upfront. A $0 treatment (the free
+// consultation) takes no payment.
 //
-// ⚠️ THESE TWO FUNCTIONS ARE THE ONLY DEFINITION OF WHAT A DEPOSIT COSTS.
+// ⚠️ THESE TWO FUNCTIONS ARE THE ONLY DEFINITION OF WHAT IS CHARGED.
 // Both /api/create-payment-intent and the /api/book verification call them, so
 // the amount charged and the amount checked can never drift apart. The price is
 // always read from the D1 treatment/addon rows - NEVER from the request body.
 // If the browser could name the amount, a client could pay $1 and pass the check.
-const DEPOSIT_PCT = 30;
-const DEPOSIT_CAP_CENTS = 5000; // $50.00 AUD
 
 function totalPriceAud(treatment, addons) {
   return (treatment?.price_aud || 0) + (addons || []).reduce((s, a) => s + (a.price_aud || 0), 0);
@@ -360,7 +368,7 @@ function totalPriceAud(treatment, addons) {
 function depositCentsFor(priceAud) {
   const p = Number(priceAud);
   if (!Number.isFinite(p) || p <= 0) return 0;
-  return Math.min(Math.round(p * 100 * (DEPOSIT_PCT / 100)), DEPOSIT_CAP_CENTS);
+  return Math.round(p * 100); // full price in cents
 }
 
 function fmtMoneyCents(cents) {
@@ -378,10 +386,10 @@ function fmtMoneyCents(cents) {
 // Under the ACL a forfeited amount must be a genuine pre-estimate of loss, which is
 // why it varies with the notice given rather than being flatly non-refundable.
 const CANCELLATION_POLICY =
-  'Your deposit confirms your appointment and comes off the total on the day. ' +
-  'Cancel or reschedule with 48 hours notice or more and the deposit is fully refunded or moved to your new time. ' +
-  'Between 24 and 48 hours the deposit is kept toward the 50% cancellation fee. ' +
-  'For same-day cancellations and missed appointments the deposit is kept - the slot cannot be filled at that notice. ' +
+  'Your full payment secures your appointment. ' +
+  'Cancel or reschedule with 48 hours notice or more and your payment is fully refunded or moved to your new time. ' +
+  'Between 24 and 48 hours, 50% of your payment is refunded. ' +
+  'For same-day cancellations and missed appointments your payment is kept - the slot cannot be filled at that notice. ' +
   'Full terms: ' + SITE + '/#cancellation-policy';
 
 const PREP_FORMS = {
@@ -586,11 +594,24 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     let depositPaidCents = 0;
     const pid = String(b.payment_intent_id || '').trim();
 
-    if (depositCents > 0 && env.STRIPE_SECRET_KEY && !pid) {
-      // A deposit is owed and payments are working, so the booking is not valid
-      // without one. Without this a client could POST straight to /api/book and
-      // skip the payment step entirely.
-      return json({ error: 'deposit_required', deposit_cents: depositCents }, 402, cors);
+    // Check if this client's phone is flagged as requiring a deposit.
+    // Normalise to digits only so "0489052103" and "+61489052103" both match.
+    const phoneDigits = phone.replace(/\D/g, '');
+    const clientFlag = await db.prepare(
+      'SELECT require_deposit FROM client_flags WHERE phone = ?'
+    ).bind(phoneDigits).first().catch(() => null);
+    const requiresDeposit = clientFlag?.require_deposit === 1;
+
+    if (depositCents > 0 && !pid && (env.STRIPE_SECRET_KEY || requiresDeposit)) {
+      // A deposit is owed. If Stripe is live the client can pay online; if not
+      // but the client is flagged, they must call Stefani to arrange payment.
+      return json({
+        error: 'deposit_required',
+        deposit_cents: depositCents,
+        ...(requiresDeposit && !env.STRIPE_SECRET_KEY
+          ? { message: 'A deposit is required for your booking. Please call Stefani on 0404 967 051 to arrange.' }
+          : {}),
+      }, 402, cors);
     }
 
     if (pid && env.STRIPE_SECRET_KEY) {
@@ -627,14 +648,14 @@ async function handlePublic(req, env, ctx, url, path, cors) {
         `${what} — ${fmtDate(b.date)}, ${fmtTime(startMin)} (${duration} min · $${price})\n` +
         `${name} · ${phone}${email ? ' · ' + email : ''}` +
         (notes ? `\nNotes: ${notes}` : '') +
-        (paymentIntentId ? `\n💳 ${fmtMoneyCents(depositPaidCents)} deposit paid · ${fmtMoneyCents(price * 100 - depositPaidCents)} due on the day` : '') +
+        (paymentIntentId ? `\n💳 ${fmtMoneyCents(depositPaidCents)} paid in full` : '') +
         `\nRef ${id}`
       ),
       sendEmail(env, email, `Booking confirmed: ${what}, ${fmtDate(b.date)} ${fmtTime(startMin)} — Revive Aesthetics`,
         confirmationEmail({ name, what, dateLabel: fmtDate(b.date), timeLabel: fmtTime(startMin), duration, price,
           deposit: !!paymentIntentId,
-          depositLabel: depositPaidCents ? `${fmtMoneyCents(depositPaidCents)} deposit` : '',
-          balanceLabel: depositPaidCents ? fmtMoneyCents(price * 100 - depositPaidCents) : '' }, cancelUrl,
+          depositLabel: depositPaidCents ? `full payment of ${fmtMoneyCents(depositPaidCents)}` : '',
+          balanceLabel: '' }, cancelUrl,
           treatmentForms(t.id, id, name, phone, email))),
       // Server-side conversion. event_id === booking id, matching the browser
       // pixel, so Meta dedupes the pair into one conversion. No-op unless the
@@ -1215,7 +1236,38 @@ async function handleAdmin(req, env, url, path, cors) {
     await db.exec(`ALTER TABLE bookings ADD COLUMN deposit_cents INTEGER DEFAULT 0`).catch(() => {});
     // treatment_ids on addons — added 2026-09-01; empty string = applies to all treatments
     await db.exec(`ALTER TABLE addons ADD COLUMN treatment_ids TEXT NOT NULL DEFAULT ''`).catch(() => {});
+    // client_flags — added 2026-09-08; flags clients who must pay a deposit before booking
+    await db.prepare(
+      `CREATE TABLE IF NOT EXISTS client_flags (
+        phone           TEXT PRIMARY KEY,   -- digits only, e.g. "0489052103"
+        require_deposit INTEGER DEFAULT 1,  -- 1 = always require deposit
+        note            TEXT DEFAULT '',    -- internal reason (Stefani-only)
+        created_at      TEXT DEFAULT (datetime('now'))
+      )`
+    ).run();
     return json({ ok: true }, 200, cors);
+  }
+
+  if (path === '/api/admin/client-flags' && req.method === 'GET') {
+    const { results } = await db.prepare('SELECT * FROM client_flags ORDER BY created_at DESC').all();
+    return json({ flags: results }, 200, cors);
+  }
+
+  if (path === '/api/admin/flag-client' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    const phone = String(b.phone || '').replace(/\D/g, '');
+    if (phone.length < 8) return json({ error: 'phone_required' }, 400, cors);
+    const requireDeposit = b.require_deposit === false ? 0 : 1;
+    const note = String(b.note || '').slice(0, 300);
+    if (requireDeposit === 0) {
+      await db.prepare('DELETE FROM client_flags WHERE phone = ?').bind(phone).run();
+      return json({ ok: true, removed: true, phone }, 200, cors);
+    }
+    await db.prepare(
+      `INSERT OR REPLACE INTO client_flags (phone, require_deposit, note, created_at)
+       VALUES (?, 1, ?, datetime('now'))`
+    ).bind(phone, note).run();
+    return json({ ok: true, flagged: true, phone }, 200, cors);
   }
 
   return json({ error: 'not_found' }, 404, cors);
