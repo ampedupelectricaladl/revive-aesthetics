@@ -23,7 +23,6 @@ database_id = "b0e07435-7e48-42c7-9387-b1e18a0792c5"
 TELEGRAM_CHAT_IDS = "8964116820"
 # Origins allowed to call the API (site domains). localhost always allowed for testing.
 ALLOWED_ORIGINS = "https://ampedupelectricaladl.github.io,https://reviveaestheticsadl.com.au,https://www.reviveaestheticsadl.com.au"
-# Email sender identity. Interim: Marcus's business Gmail sends, displayed as Revive,
-# replies go to Stefani's Gmail. Swap to her account by re-minting GMAIL_* secrets.
-MAIL_FROM = "Revive Aesthetics <ampedupelectricaladl@gmail.com>"
-MAIL_REPLY_TO = "reviveaestheticsadl@gmail.com"
+# Email sender identity: Stefani's own Gmail (GMAIL_REFRESH_TOKEN minted for it 2026-09-13).
+# Never point this at an Amped Up address — Revive firewall.
+MAIL_FROM = "Revive Aesthetics <reviveaestheticsadl@gmail.com>"
