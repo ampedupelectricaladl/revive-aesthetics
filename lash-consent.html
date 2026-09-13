@@ -227,6 +227,43 @@
         </div>
       </div>
 
+      <!-- 3b. Sensitive skin check — shown only when ?sensitive=1 is in the URL -->
+      <div class="sec" id="sensitive-sec" hidden>
+        <p class="eyebrow">Sensitive skin — extra questions</p>
+        <h2>Your skin <em>today</em></h2>
+        <p class="hint">You've mentioned a history of contact dermatitis on your eyelids. These extra questions help Stefani take extra care with you.</p>
+
+        <div style="margin-bottom:24px;">
+          <p class="q-label" style="margin-bottom:12px;font-weight:400;">How does your eyelid skin feel <em>right now, today</em>?</p>
+          <div style="display:grid;gap:8px;">
+            <label class="opt"><input type="radio" name="skin_status" value="clear" /><span>Clear and settled — no redness, dryness, or flaking today</span></label>
+            <label class="opt"><input type="radio" name="skin_status" value="mild" /><span>Slightly reactive — a little sensitive but no active flare</span></label>
+            <label class="opt"><input type="radio" name="skin_status" value="flare" /><span>Active flare — I have redness, irritation, or broken skin on my eyelids today</span></label>
+          </div>
+          <div class="flag-note" id="flare-warning">An active flare means the treatment isn't safe today. Please contact Stefani on 0404 967 051 to rebook once your skin has settled — your deposit is fully transferable, no problem at all.</div>
+        </div>
+
+        <p class="q-label" style="font-weight:400;margin-bottom:10px;">What contacts the eyelid area during a Korean Lash Lift &amp; Tint</p>
+        <div class="steps-card" style="margin-bottom:20px;">
+          <div class="row"><span class="n">·</span><div><span class="t">Silicone shield adhesive</span> <span class="d">— a gentle adhesive that fixes the silicone pad directly onto the eyelid</span></div></div>
+          <div class="row"><span class="n">·</span><div><span class="t">Lifting cream</span> <span class="d">— applied to the lashes; sits close to the eyelid skin for the processing time</span></div></div>
+          <div class="row"><span class="n">·</span><div><span class="t">Setting cream</span> <span class="d">— applied directly after to lock in the curl shape</span></div></div>
+          <div class="row"><span class="n">·</span><div><span class="t">Conditioning serum</span> <span class="d">— nourishing treatment applied after setting</span></div></div>
+          <div class="row"><span class="n">·</span><div><span class="t">Lash tint</span> <span class="d">— a semi-permanent dye applied along the lash line, close to the eyelid skin</span></div></div>
+        </div>
+
+        <label class="opt"><input type="checkbox" id="c-chemical-aware" /><span>I understand that these products contact the eyelid area and that, with my history of sensitive skin, there is a greater chance of redness, irritation, or swelling after the treatment. I'll tell Stefani straight away if I feel any discomfort during the session.</span></label>
+
+        <div style="margin-top:20px;">
+          <p class="q-label" style="font-weight:400;margin-bottom:10px;">Patch test</p>
+          <div style="display:grid;gap:8px;">
+            <label class="opt"><input type="radio" name="patch_test" value="done_no_reaction" /><span>Yes — I had a patch test with Revive products and did not react</span></label>
+            <label class="opt"><input type="radio" name="patch_test" value="done_mild" /><span>Yes — I had a patch test and had a mild reaction (Stefani and I have discussed this)</span></label>
+            <label class="opt"><input type="radio" name="patch_test" value="no_test_aware" /><span>No — I have not had a patch test and I understand this increases the risk of a reaction</span></label>
+          </div>
+        </div>
+      </div>
+
       <!-- 4. Photos -->
       <div class="sec">
         <p class="eyebrow">Section 4</p>
@@ -293,6 +330,20 @@
   if (qs.get('email')) $('f-email').value = qs.get('email');
   var bookingId = qs.get('booking') || '';
 
+  // Show sensitive-skin section when ?sensitive=1 is in the URL
+  var isSensitive = qs.get('sensitive') === '1';
+  if (isSensitive) $('sensitive-sec').hidden = false;
+
+  // Flare warning — show the red card when "active flare" is selected
+  document.querySelectorAll('input[name="skin_status"]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      document.querySelectorAll('input[name="skin_status"]').forEach(function (rb) {
+        rb.closest('.opt').classList.toggle('checked', rb.checked);
+      });
+      $('flare-warning').classList.toggle('show', r.value === 'flare' && r.checked);
+    });
+  });
+
   document.querySelectorAll('.opt input').forEach(function (cb) {
     cb.addEventListener('change', function () {
       if (cb.type === 'radio') {
@@ -343,8 +394,15 @@
     }
     if (sign.length < 2) return fail('Please type your name to sign.');
 
+    // Sensitive-skin section validation
+    if (isSensitive) {
+      if (!radio('skin_status')) return fail('Please let us know how your skin feels today.');
+      if (!$('c-chemical-aware').checked) return fail('Please tick the sensitive skin acknowledgement to continue.');
+      if (!radio('patch_test')) return fail('Please answer the patch test question.');
+    }
+
     var body = {
-      form: 'korean-lash-lift',
+      form: isSensitive ? 'korean-lash-lift-sensitive' : 'korean-lash-lift',
       booking_id: bookingId, name: name, phone: phone, email: email,
       other_conditions: $('f-other').value,
       photo_consent: radio('photos'),
@@ -352,6 +410,11 @@
       signature: sign, website: $('f-website').value,
     };
     HEALTH.forEach(function (k) { body[k] = radio(k); });
+    if (isSensitive) {
+      body.skin_status = radio('skin_status');
+      body.c_chemical_aware = $('c-chemical-aware').checked;
+      body.patch_test = radio('patch_test');
+    }
 
     var btn = $('submit-btn'); btn.disabled = true; btn.textContent = 'Sending…';
     fetch(API + '/api/consent', {
