@@ -30,7 +30,8 @@ API_URL=$(echo "$DEPLOY_OUT" | grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' |
 echo "   API URL: $API_URL"
 
 echo "== 5/6 Setting secrets =="
-printf '%s' "$(cat ~/.openclaw/telegram.token)" | npx wrangler secret put TELEGRAM_BOT_TOKEN
+# Revive's OWN bot (@ReviveAdlBot). Never ~/.openclaw/telegram.token — that is Amped Up's bot.
+printf '%s' "$(cat ~/.openclaw/revive-telegram.token | tr -d '\r\n')" | npx wrangler secret put TELEGRAM_BOT_TOKEN
 if [ ! -f ~/.openclaw/revive-admin-token.txt ]; then
   node -e "console.log(require('crypto').randomBytes(24).toString('hex'))" > ~/.openclaw/revive-admin-token.txt
   echo "   generated admin token -> ~/.openclaw/revive-admin-token.txt"
