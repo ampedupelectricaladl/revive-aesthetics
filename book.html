@@ -462,6 +462,13 @@
       card.addEventListener('click', function () { pickTreatment(t); });
       grid.appendChild(card);
     });
+    // Ad links can open straight on one treatment: book.html?t=lash-lift
+    // An unknown or missing id just shows the normal list. 'Back' still returns to it.
+    var wantT = (qs.get('t') || '').trim();
+    if (wantT) {
+      var hit = r.data.treatments.filter(function (t) { return t.id === wantT; })[0];
+      if (hit) pickTreatment(hit);
+    }
   }).catch(function () { show('p-offline', null); });
 
   function updateTimeSub() {
