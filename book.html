@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
-<script src="https://js.stripe.com/v3/"></script>
+<script src="https://js.stripe.com/v3/" defer></script>
 
 <style>
   :root {
@@ -312,8 +312,8 @@
           <div id="dep-card-errors" class="msg err" style="margin-top:8px;display:none;"></div>
         </div>
         <div class="field" style="margin-bottom:18px;">
-          <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer;font-family:var(--sans);font-size:13px;line-height:1.6;color:var(--plum);">
-            <input type="checkbox" id="dep-agree" style="margin-top:3px;flex:0 0 auto;" />
+          <label class="policy-agree-label" style="text-transform:none;letter-spacing:0;font-size:14px;line-height:1.6;color:var(--plum);">
+            <input type="checkbox" id="dep-agree" />
             <span>I understand the deposit is kept if I cancel inside 24 hours or miss my appointment.</span>
           </label>
         </div>
