@@ -27,7 +27,7 @@ Boutique Adelaide skin studio. Static site (GitHub Pages) + custom online bookin
 npx wrangler login          # once, interactive (opens browser)
 bash worker/deploy.sh       # everything else
 ```
-Secrets set by the script: `TELEGRAM_BOT_TOKEN` (from `~/.openclaw/telegram.token`),
+Secrets set by the script: `TELEGRAM_BOT_TOKEN` (Revive's own bot @ReviveAdlBot, from `~/.openclaw/revive-telegram.token`),
 `ADMIN_TOKEN` (generated → `~/.openclaw/revive-admin-token.txt`).
 Booking/cancellation alerts go to the Telegram chat IDs in `worker/wrangler.toml`
 (`TELEGRAM_CHAT_IDS` — add Stefani's once she messages @Ampelectricalbot).
