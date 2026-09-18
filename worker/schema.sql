@@ -33,7 +33,9 @@ CREATE TABLE IF NOT EXISTS bookings (
   phone        TEXT NOT NULL,
   email        TEXT NOT NULL DEFAULT '',
   notes        TEXT NOT NULL DEFAULT '',
-  status       TEXT NOT NULL DEFAULT 'confirmed',  -- confirmed | cancelled
+  status       TEXT NOT NULL DEFAULT 'confirmed',  -- confirmed | cancelled | pending (checkout hold) | abandoned
+  -- Later columns (price_override, stripe_payment_intent_id, deposit_paid, deposit_cents, lifecycle,
+  -- hold_until, followup_*, refunded_cents, ...) are added by the worker's ensureBookingSchema().
   reminded     INTEGER NOT NULL DEFAULT 0,         -- day-before reminder email sent
   cancel_token TEXT NOT NULL,
   created_at   TEXT NOT NULL,
@@ -51,6 +53,20 @@ CREATE TABLE IF NOT EXISTS slot_overrides (
   PRIMARY KEY (date, start_min)
 );
 CREATE INDEX IF NOT EXISTS ix_bookings_date ON bookings(date);
+
+-- Every Stripe webhook event, recorded before it is acknowledged (the id is the dedupe).
+-- Also created lazily by the worker.
+CREATE TABLE IF NOT EXISTS stripe_events (
+  id                TEXT PRIMARY KEY,
+  type              TEXT NOT NULL,
+  payment_intent_id TEXT,
+  payload           TEXT NOT NULL,
+  received_at       INTEGER NOT NULL,       -- epoch ms
+  claimed_at        INTEGER,
+  attempts          INTEGER NOT NULL DEFAULT 0,
+  processed_at      INTEGER,
+  result            TEXT
+);
 
 CREATE TABLE IF NOT EXISTS blocked_dates (
   date   TEXT PRIMARY KEY,                -- YYYY-MM-DD

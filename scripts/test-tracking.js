@@ -30,7 +30,7 @@ function ok(cond, label) {
  * Returns what it tried to do, so we can assert on real behaviour rather than
  * on the presence of source strings.
  */
-function loadTracking({ pixelId, pathname }) {
+function loadTracking({ pixelId, pathname, search, storage }) {
   let src = fs.readFileSync(TRACKING, 'utf8');
   if (pixelId !== undefined) {
     const before = src;
@@ -43,7 +43,8 @@ function loadTracking({ pixelId, pathname }) {
 
   const win = {};
   win.window = win;
-  win.location = { pathname };
+  win.location = { pathname, search: search || '' };
+  if (storage) win.localStorage = storage;
   win.document = {
     createElement: () => {
       const el = {};
@@ -194,12 +195,29 @@ for (const p of ['/', '/index.html', '/book.html']) {
   ok(/event_id: eventId/.test(wsrc), 'worker sends event_id for deduplication');
   ok(/metaConversion\(env, \{/.test(wsrc), 'worker calls metaConversion on booking');
 
-  // It must sit inside the existing waitUntil/allSettled block, so a CAPI
+  // It must sit inside an allSettled([...]) array that is handed to waitUntil, so a CAPI
   // failure can neither delay nor break the booking response.
-  const wu = wsrc.slice(wsrc.indexOf('ctx.waitUntil(Promise.allSettled(['));
-  const block = wu.slice(0, wu.indexOf(']));'));
-  ok(block.includes('metaConversion('),
-    'metaConversion runs inside waitUntil(allSettled(...)) so it cannot break a booking');
+  // (The old check sliced from the FIRST `ctx.waitUntil(Promise.allSettled([` in the file;
+  // on 14 Sept the cron handler gained one earlier in the file, so the slice read the cron
+  // block and missed the booking's. The call site is now located directly instead.)
+  const callSites = [];
+  for (const m of wsrc.matchAll(/metaConversion\(env, \{/g)) {
+    if (!/function\s+$/.test(wsrc.slice(Math.max(0, m.index - 20), m.index))) callSites.push(m.index);
+  }
+  ok(callSites.length === 1, 'exactly one metaConversion call site (found ' + callSites.length + ')');
+  const callAt = callSites[0] === undefined ? -1 : callSites[0];
+  const settledAt = callAt === -1 ? -1 : wsrc.lastIndexOf('Promise.allSettled([', callAt);
+  ok(callAt !== -1 && settledAt !== -1 && !wsrc.slice(settledAt, callAt).includes(']);') &&
+     wsrc.indexOf(']);', callAt) !== -1,
+    'metaConversion runs inside allSettled([...]) so it cannot break a booking');
+  const holder = callAt === -1 ? '' : wsrc.slice(wsrc.lastIndexOf('\nasync function ', callAt), callAt);
+  const holderName = (holder.match(/^\nasync function (\w+)\(/) || [])[1] || '';
+  const bkRoute = wsrc.slice(wsrc.indexOf("path === '/api/book' && req.method === 'POST'"));
+  const bkBody = bkRoute.slice(0, bkRoute.indexOf("// One-tap Apple Calendar subscribe"));
+  ok(holderName === 'notifyBookingConfirmed' &&
+     new RegExp('ctx\\.waitUntil\\(' + holderName + '\\(').test(bkBody) &&
+     !new RegExp('await ' + holderName + '\\(').test(bkBody),
+    '/api/book hands the notifications (incl. the conversion) to waitUntil and never awaits them');
 
   // Raw PII must never be sent - email/phone/name go through sha256Hex.
   const fn = wsrc.slice(wsrc.indexOf('async function metaConversion'));
@@ -227,6 +245,75 @@ for (const p of ['/', '/index.html', '/book.html']) {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// 9. Traffic-source capture (utm_* / fbclid) - independent of the pixel
+// ---------------------------------------------------------------------------
+{
+  function memStore() {
+    const m = {};
+    return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, _m: m };
+  }
+  // Landing from the ad: captured even with NO pixel id.
+  const store = memStore();
+  const r1 = loadTracking({ pixelId: '', pathname: '/book.html', storage: store,
+    search: '?utm_source=instagram&utm_medium=paid&utm_campaign=lashlift95&fbclid=abc123&junk=1' });
+  ok(typeof r1.win.reviveAttribution === 'function', 'attribution: helper defined with pixel disabled');
+  const got = r1.win.reviveAttribution();
+  ok(got.utm_source === 'instagram' && got.utm_medium === 'paid' && got.utm_campaign === 'lashlift95',
+    'attribution: utm source/medium/campaign captured from the landing URL');
+  ok(got.fbclid === 'abc123', 'attribution: fbclid captured');
+  ok(got.landing_page === '/book.html', 'attribution: landing page recorded');
+  ok(!('junk' in got), 'attribution: unrelated query params are not captured');
+  ok(r1.injected.length === 0 && r1.fbqCalls.length === 0, 'attribution: capturing loads/sends nothing');
+
+  // Homepage (tagged) -> book.html (untagged) keeps the source.
+  const r2 = loadTracking({ pathname: '/book.html', storage: store, search: '' });
+  ok(r2.win.reviveAttribution().utm_campaign === 'lashlift95', 'attribution: an untagged later page keeps the saved source');
+
+  // A new tagged visit replaces it (last touch).
+  const r3 = loadTracking({ pathname: '/', storage: store, search: '?utm_source=google' });
+  const g3 = r3.win.reviveAttribution();
+  ok(g3.utm_source === 'google' && !g3.utm_campaign, 'attribution: a new tagged visit replaces the old one');
+
+  // Expired after 30 days.
+  const old = JSON.parse(store._m.revive_attr); old.at = Date.now() - 31 * 24 * 3600 * 1000;
+  store.setItem('revive_attr', JSON.stringify(old));
+  const r4 = loadTracking({ pathname: '/book.html', storage: store, search: '' });
+  ok(Object.keys(r4.win.reviveAttribution()).length === 0, 'attribution: a source older than 30 days is dropped');
+
+  // Storage that throws (private mode / in-app browsers) never breaks the page.
+  const bad = { getItem: () => { throw new Error('denied'); }, setItem: () => { throw new Error('denied'); } };
+  let threw = false, g5 = null;
+  try {
+    const r5 = loadTracking({ pathname: '/book.html', storage: bad, search: '?utm_source=instagram' });
+    g5 = r5.win.reviveAttribution();
+  } catch (e) { threw = true; }
+  ok(!threw, 'attribution: throwing localStorage does not break the page');
+  ok(g5 && g5.utm_source === 'instagram', 'attribution: falls back to in-memory for this page view');
+
+  // book.html sends it on both booking requests; the worker stores it.
+  const book = fs.readFileSync(path.join(ROOT, 'book.html'), 'utf8');
+  ok(book.includes('attribution: attributionNow(),'), 'book.html: attribution added to the booking form data');
+  ok(book.includes('attribution: state.formData.attribution,'), 'book.html: attribution sent to create-payment-intent');
+  const w = fs.readFileSync(path.join(ROOT, 'worker', 'src', 'index.js'), 'utf8').replace(/\r\n/g, '\n');
+  const cStart = w.indexOf('function cleanAttribution(raw) {');
+  const cEnd = cStart < 0 ? -1 : w.indexOf('\n}\n', cStart);
+  const cm = cStart >= 0 && cEnd > cStart ? [w.slice(cStart, cEnd + 2)] : null;
+  const fm = w.match(/const ATTRIBUTION_FIELDS = \[[^\]]*\];/);
+  ok(!!cm && !!fm, 'worker: cleanAttribution + ATTRIBUTION_FIELDS present');
+  if (cm && fm) {
+    const clean = new Function(fm[0] + cm[0] + '; return cleanAttribution;')();
+    const c = clean({ utm_source: ' instagram<script> ', utm_campaign: 5, evil: 'x', fbclid: 'a'.repeat(400) });
+    ok(c.utm_source === 'instagramscript', 'worker: markup characters stripped from attribution');
+    ok(c.utm_campaign === '' && !('evil' in c), 'worker: non-string and unknown attribution fields dropped');
+    ok(c.fbclid.length === 255, 'worker: attribution values length-capped');
+    let t = false; try { clean(null); clean('x'); clean(undefined); } catch (e) { t = true; }
+    ok(!t, 'worker: bad attribution payload never throws');
+  }
+  ok(w.split('...ATTRIBUTION_FIELDS.map(k => attr[k])').length - 1 === 2,
+    'worker: attribution written on BOTH booking insert paths (checkout hold + direct booking)');
+}
+
 console.log('\n' + pass + ' passed, ' + fails.length + ' failed');
 if (fails.length) {
   fails.forEach((f) => console.log('  FAIL  ' + f));

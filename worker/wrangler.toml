@@ -3,14 +3,17 @@ main = "src/index.js"
 compatibility_date = "2026-01-01"
 
 # Secrets (set via `wrangler secret put`, done by deploy.sh):
-#   TELEGRAM_BOT_TOKEN — @Ampelectricalbot token (booking alerts)
+#   TELEGRAM_BOT_TOKEN — @ReviveAdlBot token (~/.openclaw/revive-telegram.token). NEVER the
+#                        Amped Up bot — Revive firewall (Marcus, 2026-07-10). Reset 2026-09-14.
 #   ADMIN_TOKEN        — bearer token for /api/admin/* (stored at ~/.openclaw/revive-admin-token.txt)
 #   GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET / GMAIL_REFRESH_TOKEN — Gmail API sender
 #     (token minted for reviveaestheticsadl@gmail.com -> ~/.openclaw/revive-gmail-token.json)
 
-# Hourly: day-before reminder emails
+# Every minute: stuck Stripe events, lapsed checkout holds (30 min), due drop-off follow-ups,
+# completed marking. On the Adelaide hour the same run also sends day-before reminders and
+# the follow-up backstop sweep (gated in code, see runScheduledWork).
 [triggers]
-crons = ["0 * * * *"]
+crons = ["* * * * *"]
 
 [[d1_databases]]
 binding = "DB"

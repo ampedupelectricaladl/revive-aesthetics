@@ -5,8 +5,13 @@
  * Public:
  *   GET  /api/treatments
  *   GET  /api/availability?treatment=<id>&from=YYYY-MM-DD&days=N
- *   POST /api/create-payment-intent  {name?}  → {client_secret}
+ *   POST /api/create-payment-intent  {name,phone,email,notes,treatment,addons,date,start_min,checkout_id?}
+ *        → {client_secret, deposit_cents, checkout_id, policy}   (409 slot_unavailable / 429 too_many_bookings BEFORE any card)
+ *        Writes a status='pending' bookings row that HOLDS the slot for HOLD_MIN minutes; checkout_id is its id.
  *   POST /api/book    {treatment,date,time,name,phone,email,notes,payment_intent_id}
+ *        (confirms the held row; idempotent with the webhook. A paid deposit that cannot be booked is refunded: {error, refunded:true|false})
+ *   POST /api/webhooks/stripe  (Stripe-Signature verified against STRIPE_WEBHOOK_SECRET; payment_intent.succeeded |
+ *        payment_intent.payment_failed | payment_intent.canceled | charge.refunded)
  *   GET  /api/booking?id=&token=
  *   POST /api/cancel  {id,token}
  *   POST /api/intake  {name,phone,email,booking_id,...answers}
@@ -25,7 +30,11 @@
  *   POST /api/admin/send-confirmation {id, price_override?, intro?}  (re/send booking email, e.g. manual bookings)
  *   POST /api/admin/set-allowed-slots {date,slots:[start_min,...]}  (pin exact public slots for a date)
  *   POST /api/admin/clear-allowed-slots {date}  (restore normal availability for a date)
- *   POST /api/admin/migrate  (idempotent: create any missing tables)
+ *   POST /api/admin/migrate  (idempotent: create any missing tables/columns, backfill bookings.lifecycle)
+ *   GET  /api/admin/report?from=YYYY-MM-DD&to=YYYY-MM-DD  (deposit funnel + money, by Adelaide day the booking was started)
+ *   GET  /api/admin/bookings?...&include=all  (default: confirmed + cancelled only; pending/abandoned checkouts excluded)
+ * Cron (every minute): stuck Stripe events, lapsed holds, due drop-off follow-ups, completed marking;
+ *   at Adelaide minute 0 also day-before reminders and the follow-up backstop sweep.
  *   GET  /api/admin/client-flags               (list phones flagged as requiring deposit)
  *   POST /api/admin/flag-client {phone, require_deposit, note?}  (flag/unflag a client)
  */
@@ -41,15 +50,39 @@ const HORIZON_DAYS = 60;         // how far ahead clients can book
 
 // ---------- time helpers (all wall-clock in Adelaide) ----------
 
-function nowInAdelaide() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(new Date());
+const ADELAIDE_WALL_FMT = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+});
+
+// The Adelaide wall clock at an instant (epoch ms). DST is Intl's job, never ours.
+function adelaideWall(ms) {
+  const parts = ADELAIDE_WALL_FMT.formatToParts(new Date(ms));
   const get = t => parts.find(p => p.type === t).value;
   const date = `${get('year')}-${get('month')}-${get('day')}`;
   const min = parseInt(get('hour'), 10) * 60 + parseInt(get('minute'), 10);
   return { date, min, abs: absMin(date, min) };
+}
+
+// nowMs is injectable so cron runs and tests evaluate "now" at one fixed instant.
+function nowInAdelaide(nowMs) {
+  return adelaideWall(Number.isFinite(nowMs) ? nowMs : Date.now());
+}
+
+// created_at is ISO ("2026-09-14T00:30:00.000Z") on rows the worker wrote, but rows
+// inserted by hand with datetime('now') read "2026-08-05 10:06:01" - that is UTC too,
+// and must not be parsed as local time. Returns epoch ms, or NaN.
+function parseStoredInstant(value) {
+  if (typeof value === 'number') return value;
+  const s = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s)) return Date.parse(s.replace(' ', 'T') + 'Z');
+  return s ? Date.parse(s) : NaN;
+}
+
+// The Adelaide calendar date an instant falls on, or null.
+function adelaideDateOfInstant(value) {
+  const ms = parseStoredInstant(value);
+  return Number.isFinite(ms) ? adelaideWall(ms).date : null;
 }
 
 function absMin(dateStr, min) {
@@ -90,13 +123,47 @@ const isDateStr = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
 
 // ---------- availability ----------
 
-async function slotsForDate(db, dateStr, durationMin, nowAbs) {
+// What occupies a date: confirmed bookings PLUS active checkout holds (status 'pending',
+// a hold lifecycle, hold_until still in the future). opts.excludeId drops one row (the
+// checkout being resumed or confirmed); a hold belonging to the same person (phone digits
+// or email) never blocks them, so a customer retrying from the follow-up email is not told
+// her own abandoned attempt has taken the time.
+async function takenForDate(db, dateStr, opts) {
+  opts = opts || {};
+  const nowMs = Number.isFinite(opts.nowMs) ? opts.nowMs : Date.now();
+  let rows;
+  try {
+    ({ results: rows } = await db.prepare(
+      `SELECT id, start_min, end_min, status, phone, email FROM bookings
+       WHERE date = ? AND (status = 'confirmed'
+         OR (status = 'pending' AND lifecycle IN ('started', 'deposit_pending', 'deposit_failed') AND hold_until > ?))`
+    ).bind(dateStr, nowMs).all());
+  } catch (e) {
+    // Never let the hold columns take availability down: fall back to confirmed bookings.
+    console.error('hold-aware availability query failed, using confirmed bookings only:', String(e && e.message || e).slice(0, 200));
+    ({ results: rows } = await db.prepare(
+      "SELECT id, start_min, end_min, status, phone, email FROM bookings WHERE date = ? AND status = 'confirmed'"
+    ).bind(dateStr).all());
+  }
+  const holderPhone = String(opts.holderPhone || '').replace(/\D/g, '');
+  const holderEmail = String(opts.holderEmail || '').trim().toLowerCase();
+  return rows.filter(r => {
+    if (opts.excludeId && r.id === opts.excludeId) return false;
+    if (r.status !== 'pending') return true;
+    if (holderPhone && String(r.phone || '').replace(/\D/g, '') === holderPhone) return false;
+    if (holderEmail && String(r.email || '').trim().toLowerCase() === holderEmail) return false;
+    return true;
+  });
+}
+
+// opts: { excludeId, holderPhone, holderEmail, nowMs, noticeMin } - all optional.
+async function slotsForDate(db, dateStr, durationMin, nowAbs, opts) {
+  opts = opts || {};
+  const noticeMin = Number.isFinite(opts.noticeMin) ? opts.noticeMin : MIN_NOTICE_MIN;
   if (!OPEN_DAYS.includes(dayOfWeek(dateStr))) return [];
   const blocked = await db.prepare('SELECT 1 FROM blocked_dates WHERE date = ?').bind(dateStr).first();
   if (blocked) return [];
-  const { results: taken } = await db.prepare(
-    "SELECT start_min, end_min FROM bookings WHERE date = ? AND status = 'confirmed'"
-  ).bind(dateStr).all();
+  const taken = await takenForDate(db, dateStr, opts);
 
   // Slot overrides: if any rows exist for this date, only those start_min values are candidates.
   let allowedSet = null;
@@ -119,7 +186,7 @@ async function slotsForDate(db, dateStr, durationMin, nowAbs) {
     }
   } else {
     for (let t = OPEN_MIN; t + durationMin <= CLOSE_MIN; t += GRID_MIN) {
-      if (absMin(dateStr, t) < nowAbs + MIN_NOTICE_MIN) continue;
+      if (absMin(dateStr, t) < nowAbs + noticeMin) continue;
       const clash = taken.some(b => t < b.end_min + BUFFER_MIN && b.start_min < t + durationMin + BUFFER_MIN);
       if (!clash) slots.push(t);
     }
@@ -200,8 +267,17 @@ async function metaConversion(env, { eventName, eventId, email, phone, name, val
 
 // ---------- telegram ----------
 
+// ⚠️ FIREWALL: this worker may only ever speak through @ReviveAdlBot. Its numeric bot id
+// is public (it is the part of every token before the colon), so the check costs nothing
+// and stops a wrong token - another business's bot - from ever being used from here.
+const REVIVE_BOT_TOKEN_PREFIX = '8882453395:';
+
 async function telegram(env, text) {
   if (!env.TELEGRAM_BOT_TOKEN) return;
+  if (!String(env.TELEGRAM_BOT_TOKEN).startsWith(REVIVE_BOT_TOKEN_PREFIX)) {
+    console.error('telegram refused: TELEGRAM_BOT_TOKEN is not the @ReviveAdlBot token - nothing sent');
+    return;
+  }
   const ids = String(env.TELEGRAM_CHAT_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
   await Promise.allSettled(ids.map(chat_id =>
     fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -341,12 +417,8 @@ function cancelledEmail(b) {
 }
 
 function isoToAdelaideAbs(iso) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(new Date(iso));
-  const g = (t) => parts.find(p => p.type === t).value;
-  return absMin(`${g('year')}-${g('month')}-${g('day')}`, parseInt(g('hour'), 10) * 60 + parseInt(g('minute'), 10));
+  const ms = parseStoredInstant(iso);
+  return Number.isFinite(ms) ? adelaideWall(ms).abs : NaN;
 }
 
 const CANCEL_BASE = 'https://reviveaestheticsadl.com.au/book.html';
@@ -414,9 +486,9 @@ function treatmentForms(treatmentId, bookingId, name, phone, email) {
   };
 }
 
-async function sendReminders(env) {
+async function sendReminders(env, nowMs) {
   const db = env.DB;
-  const now = nowInAdelaide();
+  const now = nowInAdelaide(nowMs);
   const { results } = await db.prepare(
     `SELECT b.*, t.name AS tname FROM bookings b JOIN treatments t ON t.id = b.treatment_id
      WHERE b.status = 'confirmed' AND b.reminded = 0 AND b.email != '' AND b.date BETWEEN ? AND ?`
@@ -440,6 +512,997 @@ async function sendReminders(env) {
       reminderEmail(info, `${CANCEL_BASE}?cancel=${r.id}&token=${r.cancel_token}`));
     await db.prepare('UPDATE bookings SET reminded = 1 WHERE id = ?').bind(r.id).run();
   }
+}
+
+// ---------- the deposit step: holds, lifecycle, Stripe webhook (rebuilt 2026-09-14) ----------
+// A customer who reaches the deposit step has already told us who she is, what she wants
+// and when. That checkout is now a row in `bookings` from the moment she clicks Continue,
+// so it can hold the slot, be confirmed by EITHER the browser or Stripe's webhook (whichever
+// arrives first), be followed up if the card fails, and be reported on.
+//
+// `status` KEEPS ITS ORIGINAL MEANING and every existing query still keys on it:
+//   confirmed  - a real appointment in the diary (the UNIQUE slot index applies)
+//   cancelled  - a real appointment that was cancelled
+//   pending    - a checkout in progress: a HOLD on the slot, NOT an appointment
+//   abandoned  - a checkout that never became an appointment (hold released)
+// Only 'confirmed' rows are appointments. pending/abandoned rows must never reach the diary,
+// reminders, the calendar feed, the client list, the cancel link or the booking cap.
+//
+// `lifecycle` is where the row is in the money journey:
+//   started           - row written, PaymentIntent not created yet (or Stripe refused to create it)
+//   deposit_pending   - PaymentIntent exists, card not charged yet; the slot is held
+//   deposit_failed    - a card attempt failed or the PaymentIntent was cancelled; the hold stays until it lapses
+//   abandoned         - no successful payment within HOLD_MIN of the PaymentIntent; hold released
+//   deposit_paid      - deposit received and the booking confirmed (or paid but unbookable and the refund failed)
+//   completed         - a confirmed booking whose appointment end has passed, in Adelaide time (set by the cron)
+//   refunded          - the deposit was refunded, fully or partly (refunded_cents holds the amount)
+//   cancelled         - a booking cancelled by the client or by Stefani
+//   booked_no_deposit - a confirmed booking that took no online deposit (free treatment, manual/admin entry, pre-deposit era)
+//
+// New timestamp columns are INTEGER epoch milliseconds; created_at / cancelled_at stay ISO text.
+
+const BOOK_URL = CANCEL_BASE; // the booking page and the manage-booking page are the same book.html
+const HOLD_MIN = 30;                             // a checkout holds its slot this long after its PaymentIntent is created
+const HOLD_MS = HOLD_MIN * 60000;
+const HOLD_LIFECYCLES = ['started', 'deposit_pending', 'deposit_failed'];
+const FOLLOWUP_DELAY_MS = 3 * 60000;             // drop-off email goes 3 minutes after the failed/cancelled payment
+const FOLLOWUP_MAX_AGE_MS = 48 * 3600000;        // never chase a drop-off older than this
+const FOLLOWUP_EMAIL_FROM_MIN = 8 * 60;          // 8:00am Adelaide
+const FOLLOWUP_EMAIL_TO_MIN = 20 * 60;           // 8:00pm Adelaide
+const FOLLOWUP_EMAIL_PER_ADDRESS_DAYS = 7;
+const STRIPE_SIGNATURE_TOLERANCE_S = 300;
+const STUCK_EVENT_AFTER_MS = 2 * 60000;          // the cron reprocesses an event not processed after this
+const STRIPE_EVENT_MAX_ATTEMPTS = 5;
+
+const changesOf = res => Number((res && res.meta && res.meta.changes) || 0);
+const digitsOf = s => String(s || '').replace(/\D/g, '');
+const lowerOf = s => String(s || '').trim().toLowerCase();
+
+function newBookingId() {
+  return crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+}
+
+// ⚠️ THE ONE DEFINITION OF "this checkout has run out of time". Pure: nowMs is passed in.
+// hold_until is set to (PaymentIntent created + HOLD_MIN). Not lapsed at 29:59, lapsed at 30:00.
+function holdHasLapsed(row, nowMs) {
+  if (!row || row.status !== 'pending' || !HOLD_LIFECYCLES.includes(row.lifecycle)) return false;
+  const until = row.hold_until == null ? 0 : Number(row.hold_until);
+  return !Number.isFinite(until) || nowMs >= until;
+}
+
+// Customer emails only between 8:00am and 7:59pm ADELAIDE time. adelaideMin comes from nowInAdelaide().
+function isInFollowupEmailHours(adelaideMin) {
+  return adelaideMin >= FOLLOWUP_EMAIL_FROM_MIN && adelaideMin < FOLLOWUP_EMAIL_TO_MIN;
+}
+
+// ---------- schema: lazy migration + backfill ----------
+
+const BOOKING_COLUMNS = [
+  ['price_override', 'INTEGER'],
+  ['stripe_payment_intent_id', 'TEXT'],
+  ['deposit_paid', 'INTEGER DEFAULT 0'],
+  ['deposit_cents', 'INTEGER DEFAULT 0'],
+  ['lifecycle', 'TEXT'],
+  ['hold_until', 'INTEGER'],
+  ['pi_created_at', 'INTEGER'],
+  ['confirmed_at', 'INTEGER'],
+  ['abandoned_at', 'INTEGER'],
+  ['abandoned_reason', 'TEXT'],           // hold_lapsed | superseded | unbookable
+  ['payment_failed_at', 'INTEGER'],
+  ['last_payment_error', 'TEXT'],
+  ['followup_due_at', 'INTEGER'],
+  ['followed_up_at', 'INTEGER'],
+  ['followup_result', 'TEXT'],            // sending | sent | send_failed | skipped_* | superseded
+  ['refunded_cents', 'INTEGER DEFAULT 0'],
+  ['refunded_at', 'INTEGER'],
+  ['completed_at', 'INTEGER'],
+  ['unbookable_reason', 'TEXT'],
+  ['client_ip', 'TEXT'],
+  ['user_agent', 'TEXT'],
+  ['updated_at', 'INTEGER'],
+  // Traffic source, captured by assets/tracking.js from the landing URL (added 2026-09-16).
+  // Written once when the checkout row / booking is created; never used for pricing or access.
+  ['utm_source', 'TEXT'],
+  ['utm_medium', 'TEXT'],
+  ['utm_campaign', 'TEXT'],
+  ['utm_content', 'TEXT'],
+  ['utm_term', 'TEXT'],
+  ['fbclid', 'TEXT'],
+  ['landing_page', 'TEXT'],
+];
+
+// The attribution fields a booking may carry, in column order. ONE list, used by both
+// INSERT paths and the admin read, so they cannot drift.
+const ATTRIBUTION_FIELDS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term', 'fbclid', 'landing_page'];
+
+// Pure. Untrusted browser input -> an object with exactly ATTRIBUTION_FIELDS, each a short
+// printable string or ''. Anything missing, non-string or malformed becomes ''. Never throws,
+// so a bad attribution payload can never stop a booking.
+function cleanAttribution(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const out = {};
+  for (const k of ATTRIBUTION_FIELDS) {
+    const v = typeof src[k] === 'string' ? src[k] : '';
+    const max = k === 'fbclid' ? 255 : k === 'landing_page' ? 200 : 120;
+    out[k] = v.replace(/[ -<>"'`]/g, '').trim().slice(0, max);
+  }
+  return out;
+}
+
+const schemaReadyFor = new WeakSet();
+
+// Pure. The lifecycle an existing row should carry. Never returns null.
+function backfillLifecycle(row, now) {
+  const status = String((row && row.status) || '');
+  if (status === 'cancelled') return 'cancelled';
+  if (status === 'pending') return row.stripe_payment_intent_id ? 'deposit_pending' : 'started';
+  if (status === 'abandoned') return 'abandoned';
+  const end = Number(row.end_min);
+  const passed = isDateStr(row.date) && Number.isFinite(end) && absMin(row.date, end) <= now.abs;
+  if (Number(row.deposit_paid) === 1) return passed ? 'completed' : 'deposit_paid';
+  return passed ? 'completed' : 'booked_no_deposit';
+}
+
+async function backfillLifecycles(db, nowMs) {
+  const now = nowInAdelaide(nowMs);
+  const { results } = await db.prepare(
+    'SELECT id, status, deposit_paid, date, end_min, stripe_payment_intent_id FROM bookings WHERE lifecycle IS NULL'
+  ).all();
+  let n = 0;
+  for (const r of results) {
+    const res = await db.prepare('UPDATE bookings SET lifecycle = ? WHERE id = ? AND lifecycle IS NULL')
+      .bind(backfillLifecycle(r, now), r.id).run();
+    n += changesOf(res);
+  }
+  return n;
+}
+
+// Adds any missing columns (one PRAGMA when there is nothing to do), creates stripe_events and
+// backfills lifecycle. Memoised per D1 binding. Returns the number of rows backfilled.
+async function ensureBookingSchema(db, nowMs, force) {
+  if (!force && schemaReadyFor.has(db)) return 0;
+  const { results: cols } = await db.prepare('PRAGMA table_info(bookings)').all();
+  const have = new Set(cols.map(c => c.name));
+  for (const [name, type] of BOOKING_COLUMNS) {
+    if (!have.has(name)) {
+      await db.exec(`ALTER TABLE bookings ADD COLUMN ${name} ${type}`)
+        .catch(e => console.error('bookings migration failed for column', name, String(e && e.message || e).slice(0, 200)));
+    }
+  }
+  await db.prepare(
+    `CREATE TABLE IF NOT EXISTS stripe_events (
+      id                TEXT PRIMARY KEY,
+      type              TEXT NOT NULL,
+      payment_intent_id TEXT,
+      payload           TEXT NOT NULL,
+      received_at       INTEGER NOT NULL,
+      claimed_at        INTEGER,
+      attempts          INTEGER NOT NULL DEFAULT 0,
+      processed_at      INTEGER,
+      result            TEXT
+    )`
+  ).run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS ix_stripe_events_open ON stripe_events(processed_at, received_at)').run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS ix_bookings_pi ON bookings(stripe_payment_intent_id)').run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS ix_bookings_status_lifecycle ON bookings(status, lifecycle)').run();
+  const n = await backfillLifecycles(db, Number.isFinite(nowMs) ? nowMs : Date.now());
+  schemaReadyFor.add(db);
+  return n;
+}
+
+// ---------- shared helpers ----------
+
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function stripeGetPaymentIntent(env, pid) {
+  if (!env.STRIPE_SECRET_KEY || !pid) return null;
+  try {
+    const r = await fetch(`https://api.stripe.com/v1/payment_intents/${encodeURIComponent(pid)}`, {
+      headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (_) {
+    return null;
+  }
+}
+
+async function refundPaymentIntent(env, pid) {
+  try {
+    const r = await fetch('https://api.stripe.com/v1/refunds', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Idempotency-Key': `revive-refund-${pid}`,
+      },
+      body: new URLSearchParams({ payment_intent: pid }).toString(),
+    });
+    const data = await r.json().catch(() => ({}));
+    return { ok: r.ok, id: data.id || '', error: r.ok ? '' : (data.error?.message || `HTTP ${r.status}`) };
+  } catch (e) {
+    return { ok: false, id: '', error: String(e && e.message || e).slice(0, 200) };
+  }
+}
+
+async function atBookingCap(db, phone, email, now) {
+  const dup = await db.prepare(
+    "SELECT COUNT(*) AS n FROM bookings WHERE status='confirmed' AND date >= ? AND (phone = ? OR (email != '' AND email = ?))"
+  ).bind(now.date, phone, email || ' ').first();
+  return dup.n >= 2;
+}
+
+// ⚠️ THE ONE DEFINITION OF "can this person book this slot right now?".
+// /api/create-payment-intent, /api/book and the paid-checkout confirmation all call it, so
+// the check made before the card is touched and the check made before the booking is
+// written cannot drift. Active holds count as taken (except this person's own, and the row
+// named in opts.excludeId).
+async function bookingBlocker(db, dateStr, startMin, durationMin, phone, email, now, opts) {
+  const open = await slotsForDate(db, dateStr, durationMin, now.abs,
+    Object.assign({}, opts || {}, { holderPhone: phone, holderEmail: email }));
+  if (!open.includes(startMin)) return { error: 'slot_unavailable', status: 409 };
+  if (await atBookingCap(db, phone, email, now)) return { error: 'too_many_bookings', status: 429 };
+  return null;
+}
+
+const UNBOOKABLE_REASON = {
+  slot_unavailable: 'that time was taken before the booking could be saved',
+  too_many_bookings: 'they already have 2 upcoming bookings (the online limit)',
+};
+
+function unbookableRefundMessage(o, refund, amountCents) {
+  const amount = fmtMoneyCents(amountCents || 0);
+  const who = `${escHtml(o.name)} · ${escHtml(o.phone)}${o.email ? ' · ' + escHtml(o.email) : ''}`;
+  const when = `${escHtml(o.what)} — ${fmtDate(o.date)}, ${fmtTime(o.startMin)}`;
+  const reason = UNBOOKABLE_REASON[o.error] || o.error;
+  return refund.ok
+    ? `↩️ <b>Deposit refunded — booking could not be made</b>\n${who}\n${when}\n` +
+      `${amount} refunded automatically because ${reason}.\nStripe ref ${escHtml(o.pid)}`
+    : `⚠️ <b>Deposit taken but NO booking made — refund FAILED</b>\n${who}\n${when}\n` +
+      `${amount} was charged, but ${reason} and Stripe would not refund it automatically (${escHtml(refund.error)}).\n` +
+      `<b>Please refund it in Stripe yourself</b>: ${escHtml(o.pid)}`;
+}
+
+// Legacy /api/book path (a PaymentIntent with no checkout row, e.g. one created before this
+// deploy): the card was charged, then the booking could not be written. Refund it and tell
+// Stefani. Returns a Response, or null when there is nothing to refund (no key, the payment
+// never succeeded, or this payment already belongs to a confirmed booking).
+async function refundUnbookable(env, ctx, db, o) {
+  if (!env.STRIPE_SECRET_KEY || !o.pid) return null;
+  const pi = o.pi || await stripeGetPaymentIntent(env, o.pid);
+  if (!pi || pi.status !== 'succeeded') return null;
+  // A payment already attached to a CONFIRMED booking is never refunded here - otherwise
+  // replaying a paid booking's id at a taken slot would refund a deposit whose booking stands.
+  const used = await db.prepare("SELECT id FROM bookings WHERE stripe_payment_intent_id = ? AND status = 'confirmed'")
+    .bind(o.pid).first().catch(() => null);
+  if (used) return null;
+
+  const refund = await refundPaymentIntent(env, o.pid);
+  ctx.waitUntil(telegram(env, unbookableRefundMessage(o, refund, pi.amount || 0)));
+  return json({ error: o.error, refunded: refund.ok }, o.status, o.cors);
+}
+
+function bookingLinkFor(treatmentId, addonIds, date, startMin) {
+  const ids = String(addonIds || '').split(',').map(s => s.trim()).filter(Boolean);
+  let u = `${BOOK_URL}?t=${encodeURIComponent(treatmentId)}`;
+  if (ids.length) u += `&a=${ids.map(encodeURIComponent).join(',')}`;
+  if (date) u += `&d=${encodeURIComponent(date)}&m=${encodeURIComponent(String(startMin))}`;
+  return u;
+}
+
+function checkoutFollowupEmail(c) {
+  const first = escHtml(String(c.name || '').trim().split(/\s+/)[0]);
+  const button = (href, label) => `<p style="text-align:center;margin:18px 0;">
+      <a href="${escHtml(href)}" style="display:inline-block;background:#2B0F1A;color:#F2E7CE;text-decoration:none;padding:13px 30px;letter-spacing:2px;text-transform:uppercase;font-size:12px;">${label}</a>
+    </p>`;
+  const middle = c.slotOpen
+    ? `<p style="line-height:1.7;">If you'd still like that time, you can finish in under a minute:</p>
+    ${button(c.link, 'Finish my booking')}`
+    : `<p style="line-height:1.7;">That time has since been taken, but there are other times available:</p>
+    ${button(c.link, 'See available times')}`;
+  return emailShell(`Hi ${first},`,
+    `<p style="line-height:1.7;margin:0;">It looks like your booking for ${escHtml(c.what)} on ${c.dateLabel} at ${c.timeLabel} didn't quite go through, so it isn't confirmed yet.</p>
+    ${middle}
+    <p style="line-height:1.7;">Your ${c.depositLabel} deposit holds the time for you and comes straight off your total on the day.</p>
+    <p style="line-height:1.7;font-size:14px;color:#6f5b58;">If the payment gave you trouble, or another time suits better, just reply to this email or text me on
+    <a href="tel:0404967051" style="color:#2B0F1A;">0404 967 051</a> and I'll sort it for you.</p>
+    <p style="line-height:1.7;"><em style="color:#c2a878;font-size:20px;">Stefani</em><br>Revive Aesthetics</p>`);
+}
+
+async function rowForPaymentIntent(db, piId) {
+  if (!piId) return null;
+  return db.prepare('SELECT * FROM bookings WHERE stripe_payment_intent_id = ? ORDER BY created_at DESC')
+    .bind(String(piId)).first();
+}
+
+// Treatment name, display "what", duration and full price for a bookings row.
+async function describeBooking(db, row) {
+  const t = await db.prepare('SELECT id, name, price_aud, duration_min FROM treatments WHERE id = ?')
+    .bind(String(row.treatment_id || '')).first();
+  const priceOf = await makePriceOf(db);
+  const override = row.price_override;
+  const price = override !== null && override !== undefined && Number.isFinite(Number(override))
+    ? Number(override)
+    : priceOf({ price_aud: t ? t.price_aud : 0, addon_ids: row.addon_ids });
+  const tname = t ? t.name : String(row.treatment_id || 'treatment');
+  return { t, tname, what: tname + (row.addon_names ? ' + ' + row.addon_names : ''), duration: row.end_min - row.start_min, price };
+}
+
+// The same JSON /api/book has always returned, built from a bookings row.
+async function bookingSuccessPayload(db, row) {
+  const d = await describeBooking(db, row);
+  return {
+    ok: true, id: row.id, cancel_token: row.cancel_token,
+    treatment: d.tname, addon: row.addon_names || null,
+    date: row.date, date_label: fmtDate(row.date),
+    time_label: fmtTime(row.start_min), duration_min: d.duration,
+    price_aud: d.price,
+  };
+}
+
+// Confirmation email + Stefani's booking Telegram + the Meta conversion. Called EXACTLY ONCE
+// per booking, by whichever path's guarded write actually confirmed it. Returns the
+// allSettled promise so a caller can hand it to waitUntil: a tracking or email failure can
+// never undo or delay a booking that is already written.
+async function notifyBookingConfirmed(env, db, row, meta) {
+  let d;
+  try {
+    d = await describeBooking(db, row);
+  } catch (e) {
+    console.error('booking confirmed but its details could not be read for notifications', row && row.id, String(e && e.message || e).slice(0, 200));
+    return [];
+  }
+  meta = meta || {};
+  const id = row.id;
+  const depositPaidCents = Number(row.deposit_paid) === 1 ? Number(row.deposit_cents || 0) : 0;
+  const dateLabel = fmtDate(row.date);
+  const timeLabel = fmtTime(row.start_min);
+  const cancelUrl = `${CANCEL_BASE}?cancel=${id}&token=${row.cancel_token}`;
+  return Promise.allSettled([
+    telegram(env,
+      `\u{1F33F} <b>New Revive booking</b>\n` +
+      `${d.what} — ${dateLabel}, ${timeLabel} (${d.duration} min · $${d.price})\n` +
+      `${row.name} · ${row.phone}${row.email ? ' · ' + row.email : ''}` +
+      (row.notes ? `\nNotes: ${row.notes}` : '') +
+      (depositPaidCents ? `\n💳 ${fmtMoneyCents(depositPaidCents)} deposit paid · ${fmtMoneyCents(d.price * 100 - depositPaidCents)} due on the day` : '') +
+      `\nRef ${id}`
+    ),
+    sendEmail(env, row.email, `Booking confirmed: ${d.what}, ${dateLabel} ${timeLabel} — Revive Aesthetics`,
+      confirmationEmail({ name: row.name, what: d.what, dateLabel, timeLabel, duration: d.duration, price: d.price,
+        deposit: depositPaidCents > 0,
+        depositLabel: depositPaidCents ? `${fmtMoneyCents(depositPaidCents)} deposit` : '',
+        balanceLabel: depositPaidCents ? fmtMoneyCents(d.price * 100 - depositPaidCents) : '' }, cancelUrl,
+        treatmentForms(row.treatment_id, id, row.name, row.phone, row.email))),
+    // Server-side conversion. event_id === booking id, matching the browser pixel, so Meta
+    // dedupes the pair into one conversion. No-op unless META_PIXEL_ID + META_CAPI_TOKEN are set.
+    metaConversion(env, {
+      eventName: 'Schedule',
+      eventId: id,
+      email: row.email, phone: row.phone, name: row.name,
+      value: d.price,
+      contentName: d.what,
+      sourceUrl: CANCEL_BASE,
+      clientIp: meta.clientIp || row.client_ip || '',
+      userAgent: meta.userAgent || row.user_agent || '',
+    }),
+  ]);
+}
+
+// Release an older checkout row that a new attempt replaces. A row whose payment is going
+// through (or cannot be read) is left alone so its money stays traceable. A row that never
+// had a card attempt is deleted - it is noise; one that did is kept as abandoned/superseded
+// (and marked followed up, so the drop-off email never chases an attempt she has replaced).
+async function supersedeHold(env, db, row, livePi, nowMs) {
+  if (!row || row.status !== 'pending') return 'not_pending';
+  if (row.stripe_payment_intent_id) {
+    if (!livePi) return 'left_unreadable';
+    if (['succeeded', 'processing', 'requires_capture', 'requires_action'].includes(livePi.status)) return 'left_in_flight';
+  }
+  if (row.payment_failed_at == null) {
+    await db.prepare("DELETE FROM bookings WHERE id = ? AND status = 'pending' AND payment_failed_at IS NULL").bind(row.id).run();
+    return 'deleted';
+  }
+  await db.prepare(
+    `UPDATE bookings SET status = 'abandoned', lifecycle = 'abandoned', abandoned_at = ?, abandoned_reason = 'superseded',
+       hold_until = NULL, followed_up_at = COALESCE(followed_up_at, ?), followup_result = COALESCE(followup_result, 'superseded'), updated_at = ?
+     WHERE id = ? AND status = 'pending'`
+  ).bind(nowMs, nowMs, nowMs, row.id).run();
+  return 'superseded';
+}
+
+// The same person's other live holds on this date that overlap the new time.
+async function supersedeOwnHolds(env, db, o) {
+  const { results } = await db.prepare(
+    "SELECT * FROM bookings WHERE status = 'pending' AND date = ? AND id != ? AND start_min < ? AND end_min > ?"
+  ).bind(o.date, o.keepId || '', o.endMin, o.startMin).all();
+  const phone = digitsOf(o.phone);
+  const email = lowerOf(o.email);
+  for (const row of results) {
+    const same = (phone && digitsOf(row.phone) === phone) || (email && lowerOf(row.email) === email);
+    if (!same) continue;
+    const livePi = row.stripe_payment_intent_id ? await stripeGetPaymentIntent(env, row.stripe_payment_intent_id) : null;
+    await supersedeHold(env, db, row, livePi, o.nowMs);
+  }
+}
+
+// ⚠️ THE ONE PLACE A PAID CHECKOUT BECOMES A BOOKING. Both the Stripe webhook and the
+// browser's /api/book call it; the conditional UPDATE (status still pending/abandoned) is
+// what makes the confirmation email, Stefani's Telegram and the Meta conversion fire EXACTLY
+// ONCE whichever arrives first. o: { nowMs, defer(promise), clientIp?, userAgent? }.
+async function confirmPaidCheckout(env, db, row, pi, o) {
+  const nowMs = o.nowMs;
+  if (row.status === 'confirmed') return { state: 'already_confirmed', row };
+  if (!['pending', 'abandoned'].includes(row.status)) return { state: 'ignored', row };
+  if (row.unbookable_reason) {
+    return { state: 'unbookable', error: row.unbookable_reason, status: row.unbookable_reason === 'too_many_bookings' ? 429 : 409,
+      refunded: row.lifecycle === 'refunded', row };
+  }
+  // The amount taken must be the amount this checkout was priced at when its PaymentIntent was made.
+  if (!pi || pi.status !== 'succeeded' || Number(pi.amount) !== Number(row.deposit_cents) ||
+      String(pi.currency || '').toLowerCase() !== 'aud' || pi.id !== row.stripe_payment_intent_id) {
+    return { state: 'amount_mismatch', row };
+  }
+
+  // The slot is re-checked now: a late payment on an abandoned checkout is only honoured if
+  // the time is still free. Minimum notice is not re-applied - it was met when the hold began.
+  const now = nowInAdelaide(nowMs);
+  const blocker = await bookingBlocker(db, row.date, row.start_min, row.end_min - row.start_min, row.phone, row.email, now,
+    { excludeId: row.id, noticeMin: 0, nowMs });
+  if (!blocker) {
+    let res = null;
+    try {
+      res = await db.prepare(
+        `UPDATE bookings SET status = 'confirmed', lifecycle = 'deposit_paid', deposit_paid = 1, confirmed_at = ?, hold_until = NULL, updated_at = ?
+         WHERE id = ? AND status IN ('pending', 'abandoned') AND stripe_payment_intent_id = ?`
+      ).bind(nowMs, nowMs, row.id, pi.id).run();
+    } catch (e) {
+      if (!/UNIQUE/i.test(String(e && e.message || e))) throw e;
+      res = null; // someone confirmed the exact same start time in the instant between check and write
+    }
+    if (res && changesOf(res) === 1) {
+      const fresh = await db.prepare('SELECT * FROM bookings WHERE id = ?').bind(row.id).first();
+      o.defer(notifyBookingConfirmed(env, db, fresh, { clientIp: o.clientIp, userAgent: o.userAgent }));
+      return { state: 'confirmed', row: fresh };
+    }
+    if (res) {
+      const fresh = await db.prepare('SELECT * FROM bookings WHERE id = ?').bind(row.id).first();
+      if (fresh && fresh.status === 'confirmed') return { state: 'already_confirmed', row: fresh };
+      if (fresh && fresh.unbookable_reason) return confirmPaidCheckout(env, db, fresh, pi, o);
+      return { state: 'ignored', row: fresh || row };
+    }
+  }
+  return refundUnbookableCheckout(env, db, row, pi,
+    blocker ? blocker.error : 'slot_unavailable', blocker ? blocker.status : 409, nowMs);
+}
+
+// A checkout was paid but its time is gone (or the cap bites). Claim the refund with a guarded
+// write so only one path ever refunds, refund in full, tell Stefani, record it.
+async function refundUnbookableCheckout(env, db, row, pi, error, status, nowMs) {
+  const claim = await db.prepare(
+    `UPDATE bookings SET status = 'abandoned', lifecycle = 'deposit_paid', deposit_paid = 1, hold_until = NULL,
+       unbookable_reason = ?, abandoned_at = COALESCE(abandoned_at, ?), abandoned_reason = COALESCE(abandoned_reason, 'unbookable'), updated_at = ?
+     WHERE id = ? AND status IN ('pending', 'abandoned') AND (unbookable_reason IS NULL OR unbookable_reason = '')`
+  ).bind(error, nowMs, nowMs, row.id).run();
+  if (changesOf(claim) !== 1) {
+    const fresh = await db.prepare('SELECT * FROM bookings WHERE id = ?').bind(row.id).first();
+    if (fresh && fresh.status === 'confirmed') return { state: 'already_confirmed', row: fresh };
+    return { state: 'unbookable', error: (fresh && fresh.unbookable_reason) || error, status,
+      refunded: !!fresh && fresh.lifecycle === 'refunded', row: fresh || row };
+  }
+  const refund = await refundPaymentIntent(env, pi.id);
+  if (refund.ok) {
+    await db.prepare(
+      "UPDATE bookings SET lifecycle = 'refunded', refunded_cents = ?, refunded_at = COALESCE(refunded_at, ?), updated_at = ? WHERE id = ?"
+    ).bind(Number(pi.amount) || 0, nowMs, nowMs, row.id).run();
+  }
+  let what = String(row.treatment_id || 'treatment');
+  try { what = (await describeBooking(db, row)).what; } catch (_) { /* the alert still goes */ }
+  await telegram(env, unbookableRefundMessage({
+    pid: pi.id, name: row.name, phone: row.phone, email: row.email, what, date: row.date, startMin: row.start_min, error,
+  }, refund, Number(pi.amount) || 0));
+  const fresh = await db.prepare('SELECT * FROM bookings WHERE id = ?').bind(row.id).first();
+  return { state: 'unbookable', error, status, refunded: refund.ok, row: fresh || row };
+}
+
+// /api/book for a checkout that already has its row.
+async function bookHeldCheckout(env, ctx, db, req, held, pid, cors) {
+  const nowMs = Date.now();
+  if (held.status === 'confirmed') return json(await bookingSuccessPayload(db, held), 200, cors);
+  if (held.status === 'cancelled') return json({ error: 'booking_cancelled' }, 409, cors);
+  // Verify with Stripe itself - the browser saying "paid" is not evidence.
+  const pi = await stripeGetPaymentIntent(env, pid);
+  if (!pi || pi.status !== 'succeeded' || pi.amount !== Number(held.deposit_cents) || pi.currency !== 'aud') {
+    return json({ error: 'deposit_unverified' }, 402, cors);
+  }
+  const outcome = await confirmPaidCheckout(env, db, held, pi, {
+    nowMs,
+    defer: p => ctx.waitUntil(p),
+    clientIp: req.headers.get('cf-connecting-ip') || '',
+    userAgent: req.headers.get('user-agent') || '',
+  });
+  if (outcome.state === 'confirmed' || outcome.state === 'already_confirmed') {
+    return json(await bookingSuccessPayload(db, outcome.row), 200, cors);
+  }
+  if (outcome.state === 'unbookable') return json({ error: outcome.error, refunded: outcome.refunded }, outcome.status, cors);
+  return json({ error: 'deposit_unverified' }, 402, cors);
+}
+
+// ---------- Stripe webhook ----------
+
+function timingSafeEqualStr(a, b) {
+  a = String(a); b = String(b);
+  let diff = a.length ^ b.length;
+  const n = Math.max(a.length, b.length);
+  for (let i = 0; i < n; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  return diff === 0;
+}
+
+// Stripe-Signature: t=<unix>,v1=<hex hmac>[,v1=...]. HMAC-SHA256 over `${t}.${rawBody}`.
+async function verifyStripeSignature(rawBody, header, secret, nowSec, toleranceSec) {
+  const tolerance = Number.isFinite(toleranceSec) ? toleranceSec : STRIPE_SIGNATURE_TOLERANCE_S;
+  if (!secret) return { ok: false, reason: 'no_secret' };
+  if (!header) return { ok: false, reason: 'missing_header' };
+  let t = null;
+  const v1 = [];
+  for (const part of String(header).split(',')) {
+    const i = part.indexOf('=');
+    if (i < 1) continue;
+    const k = part.slice(0, i).trim();
+    const v = part.slice(i + 1).trim();
+    if (k === 't' && t === null) t = v;
+    else if (k === 'v1' && v) v1.push(v.toLowerCase());
+  }
+  if (!t || !/^\d+$/.test(t) || !v1.length) return { ok: false, reason: 'malformed_header' };
+  const ts = Number(t);
+  if (nowSec - ts > tolerance) return { ok: false, reason: 'stale_timestamp' };
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = Array.from(new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(`${t}.${rawBody}`))))
+    .map(x => x.toString(16).padStart(2, '0')).join('');
+  let matched = false;
+  for (const sig of v1) matched = timingSafeEqualStr(sig, mac) || matched;
+  return matched ? { ok: true, timestamp: ts } : { ok: false, reason: 'signature_mismatch' };
+}
+
+function stripeEventPaymentIntentId(event) {
+  const o = (event && event.data && event.data.object) || {};
+  if (o.object === 'payment_intent' && typeof o.id === 'string') return o.id;
+  if (typeof o.payment_intent === 'string') return o.payment_intent;
+  return null;
+}
+
+async function handleStripeWebhook(req, env, ctx) {
+  // RAW text first: the signature covers these exact bytes, not a re-serialised object.
+  const rawBody = await req.text();
+  const reply = (status, data) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
+  if (!env.STRIPE_WEBHOOK_SECRET) {
+    console.error('stripe webhook: STRIPE_WEBHOOK_SECRET is not set - event refused, nothing processed');
+    return reply(503, { error: 'webhook_not_configured' });
+  }
+  const nowMs = Date.now();
+  const check = await verifyStripeSignature(rawBody, req.headers.get('Stripe-Signature'), env.STRIPE_WEBHOOK_SECRET, Math.floor(nowMs / 1000));
+  if (!check.ok) {
+    console.error('stripe webhook: rejected -', check.reason);
+    return reply(400, { error: 'bad_signature', reason: check.reason });
+  }
+  let event;
+  try { event = JSON.parse(rawBody); } catch (_) { return reply(400, { error: 'bad_payload' }); }
+  if (!event || typeof event.id !== 'string' || !event.id || typeof event.type !== 'string') return reply(400, { error: 'bad_payload' });
+
+  const db = env.DB;
+  await ensureBookingSchema(db, nowMs);
+  // Recorded BEFORE the 2xx, so an event whose async processing dies is still on disk for
+  // the cron to reprocess. The primary key is the dedupe: Stripe retries arrive as no-ops.
+  const inserted = await db.prepare(
+    'INSERT OR IGNORE INTO stripe_events (id, type, payment_intent_id, payload, received_at, attempts) VALUES (?, ?, ?, ?, ?, 0)'
+  ).bind(event.id.slice(0, 255), event.type.slice(0, 100), stripeEventPaymentIntentId(event), rawBody, nowMs).run();
+  if (changesOf(inserted) === 0) return reply(200, { received: true, duplicate: true });
+  ctx.waitUntil(processStripeEvent(env, event.id, nowMs));
+  return reply(200, { received: true });
+}
+
+// Claims an event (so an overlapping cron run cannot process it too), applies it, records the result.
+async function processStripeEvent(env, eventId, nowMs) {
+  const db = env.DB;
+  nowMs = Number.isFinite(nowMs) ? nowMs : Date.now();
+  const claim = await db.prepare(
+    `UPDATE stripe_events SET claimed_at = ?, attempts = COALESCE(attempts, 0) + 1
+     WHERE id = ? AND processed_at IS NULL AND (claimed_at IS NULL OR claimed_at <= ?)`
+  ).bind(nowMs, eventId, nowMs - STUCK_EVENT_AFTER_MS).run();
+  if (changesOf(claim) !== 1) return 'not_claimed';
+  const ev = await db.prepare('SELECT * FROM stripe_events WHERE id = ?').bind(eventId).first();
+  const deferred = [];
+  let result;
+  try {
+    const event = JSON.parse(ev.payload);
+    result = await applyStripeEvent(env, db, event, nowMs, p => deferred.push(p));
+    await Promise.allSettled(deferred);
+  } catch (e) {
+    const msg = String(e && e.message || e).slice(0, 300);
+    console.error('stripe webhook: processing failed', eventId, ev && ev.type, msg);
+    if (Number(ev && ev.attempts) >= STRIPE_EVENT_MAX_ATTEMPTS) {
+      await db.prepare('UPDATE stripe_events SET processed_at = ?, result = ? WHERE id = ?')
+        .bind(nowMs, 'failed: ' + msg, eventId).run();
+      await telegram(env, `⚠️ <b>Stripe event could not be processed</b> after ${STRIPE_EVENT_MAX_ATTEMPTS} tries — check Stripe: ` +
+        `${escHtml((ev && ev.payment_intent_id) || 'no payment id')} (${escHtml(ev && ev.type)}, event ${escHtml(eventId)})\n${escHtml(msg)}`);
+    } else {
+      // Left unprocessed on purpose: the cron picks it up again after STUCK_EVENT_AFTER_MS.
+      await db.prepare('UPDATE stripe_events SET claimed_at = NULL, result = ? WHERE id = ?').bind('error: ' + msg, eventId).run();
+    }
+    return 'error';
+  }
+  await db.prepare('UPDATE stripe_events SET processed_at = ?, result = ? WHERE id = ?').bind(nowMs, String(result), eventId).run();
+  return result;
+}
+
+async function reportUnmatchedStripeEvent(env, event, piId, amount) {
+  // Never silently dropped: money moved in Stripe with no booking behind it.
+  console.error('stripe webhook: NO MATCHING BOOKING', JSON.stringify({
+    event_id: event.id, type: event.type, payment_intent: piId || null, amount: amount == null ? null : amount,
+  }));
+  const amountLabel = Number.isFinite(Number(amount)) && amount !== null ? fmtMoneyCents(Number(amount)) : 'amount unknown';
+  await telegram(env, `⚠️ <b>Stripe payment with no matching booking</b> — check Stripe: ${escHtml(piId || 'no payment id')}, ${amountLabel}\n` +
+    `(${escHtml(event.type)}, event ${escHtml(event.id)})`);
+  return 'unmatched';
+}
+
+// Only ids from the event are used to FIND rows; what a row becomes is decided by its own
+// state in D1 (and, for a payment, by comparing the amount with the row's own deposit_cents).
+async function applyStripeEvent(env, db, event, nowMs, defer) {
+  const obj = (event.data && event.data.object) || {};
+  const created = Number(event.created);
+  const eventMs = Number.isFinite(created) && created > 0 ? created * 1000 : nowMs;
+  switch (event.type) {
+    case 'payment_intent.succeeded': {
+      const row = await rowForPaymentIntent(db, obj.id);
+      if (!row) return reportUnmatchedStripeEvent(env, event, obj.id, obj.amount);
+      const out = await confirmPaidCheckout(env, db, row, obj, { nowMs, defer });
+      if (out.state === 'unbookable') return out.refunded ? 'refunded_unbookable' : 'unbookable_refund_failed';
+      if (out.state === 'amount_mismatch') {
+        console.error('stripe webhook: amount mismatch', event.id, obj.id, obj.amount, row.deposit_cents);
+        await telegram(env, `⚠️ <b>Stripe payment amount does not match the booking</b> — check Stripe: ${escHtml(obj.id)}, ` +
+          `${fmtMoneyCents(Number(obj.amount) || 0)} paid, ${fmtMoneyCents(Number(row.deposit_cents) || 0)} expected. Not confirmed.`);
+      }
+      return out.state;
+    }
+    case 'payment_intent.payment_failed':
+    case 'payment_intent.canceled': {
+      const row = await rowForPaymentIntent(db, obj.id);
+      if (!row) return reportUnmatchedStripeEvent(env, event, obj.id, obj.amount);
+      return recordDropOff(db, row, event.type, obj, eventMs, nowMs);
+    }
+    case 'charge.refunded': {
+      const piId = typeof obj.payment_intent === 'string' ? obj.payment_intent : '';
+      const row = await rowForPaymentIntent(db, piId);
+      if (!row) return reportUnmatchedStripeEvent(env, event, piId, obj.amount_refunded != null ? obj.amount_refunded : obj.amount);
+      return recordRefund(env, db, row, obj, nowMs);
+    }
+    default:
+      return 'ignored';
+  }
+}
+
+// A drop-off: the card failed or the PaymentIntent was cancelled. The hold stays until it
+// lapses; the follow-up email is due FOLLOWUP_DELAY_MS after the event.
+async function recordDropOff(db, row, type, obj, eventMs, nowMs) {
+  const failed = type === 'payment_intent.payment_failed';
+  const message = String((obj.last_payment_error && obj.last_payment_error.message) ||
+    (failed ? 'The payment failed' : 'The payment was cancelled' + (obj.cancellation_reason ? ` (${obj.cancellation_reason})` : ''))).slice(0, 300);
+  if (row.status === 'pending' && HOLD_LIFECYCLES.includes(row.lifecycle)) {
+    const res = await db.prepare(
+      `UPDATE bookings SET lifecycle = 'deposit_failed', payment_failed_at = ?, last_payment_error = ?,
+         followup_due_at = COALESCE(followup_due_at, ?), updated_at = ?
+       WHERE id = ? AND status = 'pending' AND lifecycle IN ('started', 'deposit_pending', 'deposit_failed')`
+    ).bind(eventMs, message, eventMs + FOLLOWUP_DELAY_MS, nowMs, row.id).run();
+    return changesOf(res) ? 'deposit_failed' : 'ignored_state';
+  }
+  // A card that fails after the hold lapsed is still a real drop-off. A cancellation of an
+  // already-abandoned checkout is not - that is our own abandonment, or it no longer matters.
+  if (failed && row.status === 'abandoned' && row.abandoned_reason === 'hold_lapsed' && Number(row.deposit_paid) !== 1) {
+    await db.prepare(
+      `UPDATE bookings SET payment_failed_at = ?, last_payment_error = ?, followup_due_at = COALESCE(followup_due_at, ?), updated_at = ?
+       WHERE id = ? AND status = 'abandoned'`
+    ).bind(eventMs, message, eventMs + FOLLOWUP_DELAY_MS, nowMs, row.id).run();
+    return 'failed_after_abandon';
+  }
+  return 'ignored_state';
+}
+
+async function recordRefund(env, db, row, charge, nowMs) {
+  const cents = Math.max(0, Math.round(Number(charge.amount_refunded) || 0));
+  if (!cents) return 'ignored_no_amount';
+  const res = await db.prepare(
+    `UPDATE bookings SET lifecycle = 'refunded', refunded_cents = ?, refunded_at = COALESCE(refunded_at, ?), updated_at = ?
+     WHERE id = ? AND NOT (lifecycle = 'refunded' AND COALESCE(refunded_cents, 0) = ?)`
+  ).bind(cents, nowMs, nowMs, row.id, cents).run();
+  if (!changesOf(res)) return 'already_refunded';
+  let what = String(row.treatment_id || 'treatment');
+  try { what = (await describeBooking(db, row)).what; } catch (_) { /* the alert still goes */ }
+  const deposit = Number(row.deposit_cents) || 0;
+  await telegram(env, `↩️ <b>Deposit refunded</b>\n${escHtml(row.name)} · ${escHtml(row.phone)}\n` +
+    `${escHtml(what)} — ${fmtDate(row.date)}, ${fmtTime(row.start_min)}\n` +
+    `${fmtMoneyCents(cents)} refunded${deposit && cents < deposit ? ` of the ${fmtMoneyCents(deposit)} deposit` : ''}.\n` +
+    `Stripe ref ${escHtml(row.stripe_payment_intent_id)}`);
+  return 'refunded';
+}
+
+async function reprocessStuckStripeEvents(env, nowMs) {
+  const db = env.DB;
+  const { results } = await db.prepare(
+    `SELECT id FROM stripe_events WHERE processed_at IS NULL AND received_at <= ? AND (claimed_at IS NULL OR claimed_at <= ?)
+     ORDER BY received_at LIMIT 25`
+  ).bind(nowMs - STUCK_EVENT_AFTER_MS, nowMs - STUCK_EVENT_AFTER_MS).all();
+  for (const r of results) await processStripeEvent(env, r.id, nowMs);
+  return results.length;
+}
+
+// ---------- abandonment ----------
+
+async function abandonLapsedCheckouts(env, nowMs, defer) {
+  const db = env.DB;
+  const { results } = await db.prepare(
+    `SELECT * FROM bookings WHERE status = 'pending' AND lifecycle IN ('started', 'deposit_pending', 'deposit_failed')
+       AND (hold_until IS NULL OR hold_until <= ?) ORDER BY hold_until LIMIT 50`
+  ).bind(nowMs).all();
+  let n = 0;
+  for (const row of results) {
+    if (!holdHasLapsed(row, nowMs)) continue;
+    try {
+      if ((await abandonCheckout(env, db, row, nowMs, defer)) === 'abandoned') n++;
+    } catch (e) {
+      console.error('abandonment failed', row.id, String(e && e.message || e).slice(0, 200));
+    }
+  }
+  return n;
+}
+
+async function abandonCheckout(env, db, row, nowMs, defer) {
+  let learnedDecline = null;
+  if (row.stripe_payment_intent_id && env.STRIPE_SECRET_KEY) {
+    // Ask Stripe before giving the time away: a payment whose webhook is late is confirmed, not abandoned.
+    const pi = await stripeGetPaymentIntent(env, row.stripe_payment_intent_id);
+    if (pi && pi.status === 'succeeded') {
+      const out = await confirmPaidCheckout(env, db, row, pi, { nowMs, defer });
+      return 'paid:' + out.state;
+    }
+    if (pi && ['processing', 'requires_capture'].includes(pi.status)) return 'in_flight';
+    const msg = pi && pi.last_payment_error && pi.last_payment_error.message;
+    if (msg && row.payment_failed_at == null) learnedDecline = String(msg).slice(0, 300);
+  }
+  const res = await db.prepare(
+    `UPDATE bookings SET status = 'abandoned', lifecycle = 'abandoned', abandoned_at = ?, abandoned_reason = COALESCE(abandoned_reason, 'hold_lapsed'),
+       hold_until = NULL, last_payment_error = COALESCE(last_payment_error, ?), payment_failed_at = COALESCE(payment_failed_at, ?),
+       followup_due_at = COALESCE(followup_due_at, ?), updated_at = ?
+     WHERE id = ? AND status = 'pending' AND lifecycle IN ('started', 'deposit_pending', 'deposit_failed') AND (hold_until IS NULL OR hold_until <= ?)`
+  ).bind(nowMs, learnedDecline, learnedDecline ? nowMs : null, learnedDecline ? nowMs : null, nowMs, row.id, nowMs).run();
+  if (changesOf(res) !== 1) return 'not_abandoned';
+
+  const fresh = (await db.prepare('SELECT * FROM bookings WHERE id = ?').bind(row.id).first()) || row;
+  let what = String(fresh.treatment_id || 'treatment');
+  try { what = (await describeBooking(db, fresh)).what; } catch (_) { /* the alert still goes */ }
+  const when = isDateStr(fresh.date) && Number.isInteger(fresh.start_min) ? `${fmtDate(fresh.date)}, ${fmtTime(fresh.start_min)}` : 'time not recorded';
+  const declined = fresh.last_payment_error || '';
+  const stopped = !fresh.stripe_payment_intent_id
+    ? 'the payment step never opened (Stripe did not start the payment)'
+    : 'stopped at the deposit step' + (declined ? `, card declined / payment failed: ${escHtml(declined)}` : ', no card payment was attempted');
+  const followup = fresh.followup_result === 'sent' ? 'Follow-up email already sent.'
+    : fresh.payment_failed_at != null
+      ? (fresh.email ? 'One follow-up email goes to them (8am–8pm only, once a week per address).' : 'No email address, so no follow-up email.')
+      : 'No customer email is sent for this.';
+  await telegram(env, `\u{1F6D2} <b>Didn't finish booking</b> — ${escHtml(fresh.name)} · ${escHtml(fresh.phone)} · ${escHtml(what)} · ${when}\n` +
+    `${stopped}\nThe time is free again. ${followup}`);
+  return 'abandoned';
+}
+
+// ---------- drop-off follow-up (one email per checkout, ever) ----------
+
+async function finishFollowup(db, row, nowMs, result) {
+  await db.prepare('UPDATE bookings SET followed_up_at = ?, followup_result = ?, updated_at = ? WHERE id = ? AND followed_up_at IS NULL')
+    .bind(nowMs, result, nowMs, row.id).run();
+  return result;
+}
+
+// ⚠️ THE ONE FUNCTION THAT SENDS THE CUSTOMER FOLLOW-UP. The due-dispatcher and the backstop
+// sweep both call it; the claim UPDATE (followed_up_at still NULL) means at most one email per row.
+async function sendDropOffFollowup(env, db, row, nowMs) {
+  if (!row || row.followed_up_at != null) return 'already';
+  if (!['pending', 'abandoned'].includes(row.status) || Number(row.deposit_paid) === 1) return 'skipped_paid';
+  const email = lowerOf(row.email);
+  if (!email) return finishFollowup(db, row, nowMs, 'skipped_no_email');
+  const now = nowInAdelaide(nowMs);
+  const phone = digitsOf(row.phone);
+
+  // Did they book anyway (a later checkout, or Stefani entered it)? Then there is nothing to chase.
+  const createdMs = parseStoredInstant(row.created_at);
+  const { results: later } = await db.prepare(
+    "SELECT phone, email FROM bookings WHERE status = 'confirmed' AND id != ? AND (created_at >= ? OR confirmed_at >= ?)"
+  ).bind(row.id, String(row.created_at || ''), Number.isFinite(createdMs) ? createdMs : 0).all();
+  if (later.some(b => (phone && digitsOf(b.phone) === phone) || lowerOf(b.email) === email)) {
+    return finishFollowup(db, row, nowMs, 'skipped_booked_since');
+  }
+  if (await atBookingCap(db, row.phone, email, now)) return finishFollowup(db, row, nowMs, 'skipped_at_cap');
+  const recent = await db.prepare(
+    "SELECT COUNT(*) AS n FROM bookings WHERE LOWER(email) = ? AND followup_result = 'sent' AND followed_up_at > ? AND id != ?"
+  ).bind(email, nowMs - FOLLOWUP_EMAIL_PER_ADDRESS_DAYS * 86400000, row.id).first();
+  if (recent && recent.n > 0) return finishFollowup(db, row, nowMs, 'skipped_recent_email');
+
+  const inEmailHours = isInFollowupEmailHours(nowInAdelaide(nowMs).min);
+  if (!inEmailHours) return 'waiting_for_email_hours';
+
+  const claimed = await db.prepare(
+    `UPDATE bookings SET followed_up_at = ?, followup_result = 'sending', updated_at = ?
+     WHERE id = ? AND followed_up_at IS NULL AND status IN ('pending', 'abandoned') AND COALESCE(deposit_paid, 0) = 0`
+  ).bind(nowMs, nowMs, row.id).run();
+  if (changesOf(claimed) !== 1) return 'claimed_elsewhere';
+
+  const t = await db.prepare('SELECT id, name, duration_min FROM treatments WHERE id = ?').bind(String(row.treatment_id || '')).first();
+  const addonIds = String(row.addon_ids || '').split(',').map(s => s.trim()).filter(Boolean);
+  const addons = [];
+  for (const aid of addonIds) {
+    const a = await db.prepare('SELECT name, duration_min FROM addons WHERE id = ?').bind(aid).first();
+    if (a) addons.push(a);
+  }
+  const treatmentName = t ? t.name : String(row.treatment_id || 'treatment');
+  const what = treatmentName + (addons.length ? ' + ' + addons.map(a => a.name).join(' + ') : '');
+  const hasSlot = isDateStr(row.date) && Number.isInteger(row.start_min);
+  const duration = t ? t.duration_min + addons.reduce((s, a) => s + (a.duration_min || 0), 0) : 0;
+  const slotOpen = !!t && hasSlot && (await slotsForDate(db, row.date, duration, now.abs,
+    { excludeId: row.id, holderPhone: row.phone, holderEmail: email, nowMs })).includes(row.start_min);
+  const link = slotOpen
+    ? bookingLinkFor(row.treatment_id, addonIds.join(','), row.date, row.start_min)
+    : bookingLinkFor(row.treatment_id, addonIds.join(','));
+  let sent = false;
+  try {
+    sent = await sendEmail(env, email, `Your ${treatmentName} booking isn't confirmed yet`,
+      checkoutFollowupEmail({
+        name: row.name, what, slotOpen, link,
+        dateLabel: hasSlot ? fmtDate(row.date) : '', timeLabel: hasSlot ? fmtTime(row.start_min) : '',
+        depositLabel: fmtMoneyCents(row.deposit_cents || 0),
+      }));
+  } catch (e) {
+    console.error('follow-up email failed', row.id, String(e && e.message || e).slice(0, 200));
+  }
+  if (sent) {
+    await db.prepare("UPDATE bookings SET followup_result = 'sent', updated_at = ? WHERE id = ?").bind(nowMs, row.id).run();
+    return 'sent';
+  }
+  // Release the claim so a later run can try again (still inside the 48h window).
+  await db.prepare("UPDATE bookings SET followed_up_at = NULL, followup_result = 'send_failed', updated_at = ? WHERE id = ? AND followup_result = 'sending'")
+    .bind(nowMs, row.id).run();
+  return 'send_failed';
+}
+
+// Every minute: drop-offs whose follow-up is due (set by the failed/cancelled payment event).
+async function dispatchDueFollowups(env, nowMs) {
+  const db = env.DB;
+  const { results } = await db.prepare(
+    `SELECT * FROM bookings WHERE followup_due_at IS NOT NULL AND followup_due_at <= ? AND followup_due_at > ?
+       AND followed_up_at IS NULL AND status IN ('pending', 'abandoned') ORDER BY followup_due_at LIMIT 50`
+  ).bind(nowMs, nowMs - FOLLOWUP_MAX_AGE_MS).all();
+  const out = [];
+  for (const row of results) {
+    try { out.push(await sendDropOffFollowup(env, db, row, nowMs)); }
+    catch (e) { console.error('follow-up dispatch failed', row.id, String(e && e.message || e).slice(0, 200)); }
+  }
+  return out;
+}
+
+// Hourly backstop: a row that clearly had a failed payment but never got its follow-up due
+// time (the event path missed it). Same guarded sender, so it can never double up. A row
+// abandoned WITHOUT any failed payment is never selected here.
+async function followupBackstopSweep(env, nowMs) {
+  const db = env.DB;
+  const { results } = await db.prepare(
+    `SELECT * FROM bookings WHERE followed_up_at IS NULL AND status IN ('pending', 'abandoned') AND COALESCE(deposit_paid, 0) = 0
+       AND (lifecycle = 'deposit_failed' OR payment_failed_at IS NOT NULL)
+       AND COALESCE(followup_due_at, payment_failed_at + ?, pi_created_at + ?) <= ?
+       AND COALESCE(followup_due_at, payment_failed_at + ?, pi_created_at + ?) > ?
+     ORDER BY created_at LIMIT 50`
+  ).bind(FOLLOWUP_DELAY_MS, FOLLOWUP_DELAY_MS, nowMs, FOLLOWUP_DELAY_MS, FOLLOWUP_DELAY_MS, nowMs - FOLLOWUP_MAX_AGE_MS).all();
+  const out = [];
+  for (const row of results) {
+    try { out.push(await sendDropOffFollowup(env, db, row, nowMs)); }
+    catch (e) { console.error('follow-up backstop failed', row.id, String(e && e.message || e).slice(0, 200)); }
+  }
+  return out;
+}
+
+// ---------- completed marking ----------
+
+// A confirmed booking whose appointment END has passed on the Adelaide wall clock.
+async function markCompletedBookings(env, nowMs) {
+  const now = nowInAdelaide(nowMs);
+  const res = await env.DB.prepare(
+    `UPDATE bookings SET lifecycle = 'completed', completed_at = ?, updated_at = ?
+     WHERE status = 'confirmed' AND lifecycle IN ('deposit_paid', 'booked_no_deposit')
+       AND (date < ? OR (date = ? AND end_min <= ?))`
+  ).bind(nowMs, nowMs, now.date, now.date, now.min).run();
+  return changesOf(res);
+}
+
+// ---------- reporting ----------
+
+const REPORT_NOTE =
+  'Counts are for bookings STARTED on these Adelaide calendar days. collected_cents is deposits actually received ' +
+  'through Stripe (paid deposits minus refunds). outstanding_cents is, for confirmed bookings in the range, the full ' +
+  "price (or Stefani's price override) minus the net deposit: the balance due in person on the day. This system does " +
+  'not record in-person payments, so outstanding_cents still includes balances already paid at the studio.';
+
+// Pure. rows: bookings rows (created_at, status, lifecycle, deposit_paid, deposit_cents, refunded_cents,
+// payment_failed_at, abandoned_reason, stripe_payment_intent_id, price_override). priceOf(row) -> dollars.
+function aggregateDepositReport(rows, from, to, priceOf) {
+  const out = {
+    from, to, started: 0, deposits_paid: 0, deposits_failed: 0, abandoned: 0, refunded: 0,
+    bookings_without_deposit: 0, collected_cents: 0, outstanding_cents: 0, note: REPORT_NOTE,
+  };
+  for (const r of rows || []) {
+    const day = adelaideDateOfInstant(r.created_at);
+    if (!day || day < from || day > to) continue;
+    const superseded = r.abandoned_reason === 'superseded';
+    const paid = Number(r.deposit_paid) === 1;
+    const deposit = paid ? Math.max(0, Math.round(Number(r.deposit_cents) || 0)) : 0;
+    const refunded = Math.max(0, Math.round(Number(r.refunded_cents) || 0));
+    const wentToCheckout = !!r.stripe_payment_intent_id || r.status === 'pending' || r.status === 'abandoned';
+    if (wentToCheckout && !superseded) out.started++;
+    if (paid) out.deposits_paid++;
+    if (r.payment_failed_at != null) out.deposits_failed++;
+    if (r.lifecycle === 'abandoned' && !superseded) out.abandoned++;
+    if (refunded > 0) out.refunded++;
+    if (r.status === 'confirmed' && !paid) out.bookings_without_deposit++;
+    out.collected_cents += deposit - refunded;
+    if (r.status === 'confirmed') {
+      const override = r.price_override;
+      const priceAud = override !== null && override !== undefined && Number.isFinite(Number(override)) ? Number(override) : Number(priceOf(r)) || 0;
+      out.outstanding_cents += Math.max(0, Math.round(priceAud * 100) - (deposit - refunded));
+    }
+  }
+  return out;
+}
+
+// ---------- the cron ----------
+
+async function runScheduledWork(env, nowMs) {
+  nowMs = Number.isFinite(nowMs) ? nowMs : Date.now();
+  try {
+    await ensureBookingSchema(env.DB, nowMs);
+  } catch (e) {
+    console.error('cron: booking schema check failed', String(e && e.message || e).slice(0, 200));
+  }
+  const deferred = [];
+  const defer = p => deferred.push(p);
+  const steps = [
+    ['stripe events', () => reprocessStuckStripeEvents(env, nowMs)],
+    ['abandonment', () => abandonLapsedCheckouts(env, nowMs, defer)],
+    ['follow-ups', () => dispatchDueFollowups(env, nowMs)],
+    ['completed', () => markCompletedBookings(env, nowMs)],
+  ];
+  // Hourly work runs on the Adelaide hour. Reminders keep their own reminded flag, so a missed hour is harmless.
+  if (nowInAdelaide(nowMs).min % 60 === 0) {
+    steps.push(['reminders', () => sendReminders(env, nowMs)]);
+    steps.push(['follow-up backstop', () => followupBackstopSweep(env, nowMs)]);
+  }
+  const done = {};
+  for (const [name, fn] of steps) {
+    // Independent: a failure in one never stops the others.
+    try { done[name] = await fn(); } catch (e) {
+      console.error('cron step failed:', name, String(e && e.message || e).slice(0, 200));
+      done[name] = 'error';
+    }
+  }
+  await Promise.allSettled(deferred);
+  return done;
+}
+
+// Test hook only: workerd never defines REVIVE_WORKER_TEST_HOOKS, so production exposes nothing.
+if (typeof globalThis !== 'undefined' && typeof globalThis.REVIVE_WORKER_TEST_HOOKS === 'function') {
+  globalThis.REVIVE_WORKER_TEST_HOOKS({
+    HOLD_MIN, HOLD_MS, FOLLOWUP_DELAY_MS, holdHasLapsed, isInFollowupEmailHours, backfillLifecycle,
+    aggregateDepositReport, verifyStripeSignature, nowInAdelaide, adelaideDateOfInstant, parseStoredInstant,
+    runScheduledWork, dispatchDueFollowups, followupBackstopSweep, abandonLapsedCheckouts, markCompletedBookings,
+    processStripeEvent, ensureBookingSchema, sendDropOffFollowup,
+  });
 }
 
 // ---------- http plumbing ----------
@@ -467,6 +1530,12 @@ export default {
     const url = new URL(req.url);
     const path = url.pathname;
     try {
+      // Lazy migration (lifecycle/hold columns, stripe_events, backfill): one PRAGMA per
+      // isolate once done. The Stripe webhook runs it itself, AFTER its signature check.
+      if (path.startsWith('/api/') && path !== '/api/webhooks/stripe' && env.DB) {
+        await ensureBookingSchema(env.DB, Date.now())
+          .catch(e => console.error('booking schema check failed', String(e && e.message || e).slice(0, 200)));
+      }
       if (path.startsWith('/api/admin/')) {
         const auth = req.headers.get('Authorization') || '';
         if (!env.ADMIN_TOKEN || auth !== `Bearer ${env.ADMIN_TOKEN}`) {
@@ -479,8 +1548,11 @@ export default {
       return json({ error: 'server_error', detail: String(e.message || e) }, 500, cors);
     }
   },
+  // Every minute ("* * * * *"): stuck Stripe events, lapsed holds, due follow-ups, completed
+  // marking; on the Adelaide hour also reminders and the follow-up backstop sweep.
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(sendReminders(env));
+    const nowMs = event && Number.isFinite(event.scheduledTime) ? event.scheduledTime : Date.now();
+    ctx.waitUntil(runScheduledWork(env, nowMs));
   },
 };
 
@@ -522,10 +1594,17 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     return json({ treatment: t.id, duration_min: duration, dates }, 200, cors);
   }
 
+  if (path === '/api/webhooks/stripe' && req.method === 'POST') {
+    return await handleStripeWebhook(req, env, ctx);
+  }
+
   if (path === '/api/create-payment-intent' && req.method === 'POST') {
     if (!env.STRIPE_SECRET_KEY) return json({ error: 'payments_unavailable' }, 503, cors);
     const body = await req.json().catch(() => ({}));
     const name = String(body.name || '').trim().slice(0, 120);
+    const phone = String(body.phone || '').trim();
+    const email = String(body.email || '').trim().toLowerCase();
+    const notes = String(body.notes || '').trim().slice(0, 800);
 
     // Price the booking from D1, never from the request. The client chooses WHICH
     // treatment and add-ons; the server alone decides what that costs.
@@ -534,14 +1613,86 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     if (!dt) return json({ error: 'unknown_treatment' }, 400, cors);
     const dAddons = await lookupAddons(db, body.addons ?? body.addon);
     if (dAddons === undefined) return json({ error: 'unknown_addon' }, 400, cors);
+    const startMin = parseHHMM(body.time) ?? (Number.isInteger(body.start_min) ? body.start_min : null);
+    if (!isDateStr(body.date) || startMin === null) return json({ error: 'bad_slot' }, 400, cors);
+    if (name.length < 2) return json({ error: 'name_required' }, 400, cors);
+    if (phone.replace(/\D/g, '').length < 8) return json({ error: 'phone_required' }, 400, cors);
+    if (!email) return json({ error: 'email_required' }, 400, cors);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return json({ error: 'bad_email' }, 400, cors);
     const depositCents = depositCentsFor(totalPriceAud(dt, dAddons));
     if (depositCents <= 0) return json({ error: 'no_deposit_required', deposit_cents: 0 }, 400, cors);
+
+    const duration = dt.duration_min + dAddons.reduce((s, a) => s + a.duration_min, 0);
+    const nowMs = Date.now();
+    const now = nowInAdelaide(nowMs);
+    const addonIds = dAddons.map(a => a.id).join(',');
+    const addonNames = dAddons.map(a => a.name).join(' + ');
+    const clientIp = String(req.headers.get('cf-connecting-ip') || '').slice(0, 64);
+    const userAgent = String(req.headers.get('user-agent') || '').slice(0, 300);
+
+    // The checkout being resumed (Back, then Continue again on the page), if it is still a live hold.
+    const wantId = String(body.checkout_id || '').trim().slice(0, 64);
+    const existing = wantId
+      ? await db.prepare("SELECT * FROM bookings WHERE id = ? AND status = 'pending'").bind(wantId).first()
+      : null;
+
+    // ⚠️ SLOT + CAP ARE CHECKED HERE, BEFORE ANY PaymentIntent EXISTS. The browser
+    // confirms the card before it calls /api/book, so a check that only runs there
+    // fires after the customer has already been charged. Do not move this below
+    // the Stripe call. Other people's live holds count as taken.
+    const blocker = await bookingBlocker(db, body.date, startMin, duration, phone, email, now,
+      { excludeId: existing ? existing.id : '', nowMs });
+    if (blocker) return json({ error: blocker.error }, blocker.status, cors);
+
+    if (existing && existing.stripe_payment_intent_id) {
+      const livePi = await stripeGetPaymentIntent(env, existing.stripe_payment_intent_id);
+      const sameOrder = existing.treatment_id === dt.id && (existing.addon_ids || '') === addonIds &&
+        Number(existing.deposit_cents) === depositCents;
+      if (sameOrder && livePi && livePi.client_secret && livePi.amount === depositCents &&
+          (livePi.status === 'requires_payment_method' || livePi.status === 'requires_confirmation')) {
+        // Same order, card not yet charged: hand back the SAME PaymentIntent so a
+        // back-and-forth on the page never leaves a trail of orphaned intents. The hold
+        // moves to the (possibly new) time and restarts its HOLD_MIN clock.
+        const reused = await db.prepare(
+          `UPDATE bookings SET name = ?, phone = ?, email = ?, notes = ?, date = ?, start_min = ?, end_min = ?,
+             hold_until = ?, client_ip = ?, user_agent = ?, updated_at = ?
+           WHERE id = ? AND status = 'pending'`
+        ).bind(name, phone, email, notes, body.date, startMin, startMin + duration,
+               nowMs + HOLD_MS, clientIp, userAgent, nowMs, existing.id).run();
+        if (changesOf(reused) === 1) {
+          await supersedeOwnHolds(env, db, { phone, email, date: body.date, startMin, endMin: startMin + duration, keepId: existing.id, nowMs });
+          return json({ client_secret: livePi.client_secret, deposit_cents: depositCents, checkout_id: existing.id, policy: CANCELLATION_POLICY }, 200, cors);
+        }
+      }
+      await supersedeHold(env, db, existing, livePi, nowMs);
+    } else if (existing) {
+      await supersedeHold(env, db, existing, null, nowMs);
+    }
+    await supersedeOwnHolds(env, db, { phone, email, date: body.date, startMin, endMin: startMin + duration, keepId: '', nowMs });
+
+    // The row IS the hold, and it exists before the PaymentIntent does - so every PaymentIntent
+    // this worker hands out has a booking row a webhook can find. If the row cannot be written,
+    // no payment is started at all.
+    const checkoutId = newBookingId();
+    const attr = cleanAttribution(body.attribution);
+    await db.prepare(
+      `INSERT INTO bookings (id, treatment_id, addon_ids, addon_names, date, start_min, end_min, name, phone, email, notes,
+         status, reminded, cancel_token, created_at, stripe_payment_intent_id, deposit_paid, deposit_cents,
+         lifecycle, hold_until, client_ip, user_agent, updated_at, ${ATTRIBUTION_FIELDS.join(', ')})
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?, '', 0, ?, 'started', ?, ?, ?, ?, ${ATTRIBUTION_FIELDS.map(() => '?').join(', ')})`
+    ).bind(checkoutId, dt.id, addonIds, addonNames, body.date, startMin, startMin + duration, name, phone, email, notes,
+           crypto.randomUUID(), new Date(nowMs).toISOString(), depositCents, nowMs + HOLD_MS, clientIp, userAgent, nowMs,
+           ...ATTRIBUTION_FIELDS.map(k => attr[k])).run();
 
     const params = new URLSearchParams();
     params.set('amount', String(depositCents));
     params.set('currency', 'aud');
     params.append('payment_method_types[]', 'card');
     if (name) params.set('description', `Revive Aesthetics booking deposit — ${name}`);
+    params.set('metadata[checkout_id]', checkoutId);
+    params.set('metadata[phone]', phone);
+    if (attr.utm_source) params.set('metadata[utm_source]', attr.utm_source);
+    if (attr.utm_campaign) params.set('metadata[utm_campaign]', attr.utm_campaign);
     const r = await fetch('https://api.stripe.com/v1/payment_intents', {
       method: 'POST',
       headers: {
@@ -551,16 +1702,39 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       body: params.toString(),
     });
     const pi = await r.json();
-    if (!r.ok) return json({ error: 'stripe_error', detail: pi.error?.message }, 502, cors);
+    if (!r.ok) {
+      // Release the hold now; the cron abandons the row and tells Stefani the payment step never opened.
+      await db.prepare("UPDATE bookings SET hold_until = ?, updated_at = ? WHERE id = ? AND status = 'pending'")
+        .bind(nowMs, nowMs, checkoutId).run().catch(() => {});
+      return json({ error: 'stripe_error', detail: pi.error?.message }, 502, cors);
+    }
+    // The hold's HOLD_MIN clock starts when the PaymentIntent exists.
+    const piAt = Date.now();
+    const armed = await db.prepare(
+      `UPDATE bookings SET stripe_payment_intent_id = ?, lifecycle = 'deposit_pending', pi_created_at = ?, hold_until = ?, updated_at = ?
+       WHERE id = ? AND status = 'pending'`
+    ).bind(pi.id, piAt, piAt + HOLD_MS, piAt, checkoutId).run();
+    if (changesOf(armed) !== 1) throw new Error('checkout row vanished before its payment could be attached');
     // deposit_cents is returned so the page can DISPLAY the figure. It is never
-    // read back as an input - /api/book recomputes it from D1 either way.
-    return json({ client_secret: pi.client_secret, deposit_cents: depositCents, policy: CANCELLATION_POLICY }, 200, cors);
+    // read back as an input - the confirmation compares Stripe's amount with the row.
+    return json({ client_secret: pi.client_secret, deposit_cents: depositCents, checkout_id: checkoutId, policy: CANCELLATION_POLICY }, 200, cors);
   }
 
   if (path === '/api/book' && req.method === 'POST') {
     const b = await req.json().catch(() => ({}));
     if (b.website) return json({ ok: true }, 200, cors); // honeypot: pretend success
+    const pid = String(b.payment_intent_id || '').trim();
 
+    // A deposit taken through /api/create-payment-intent already has its booking row (the
+    // hold). Confirm THAT row. The Stripe webhook may have confirmed it already, in which
+    // case this returns the same booking and sends nothing a second time.
+    if (pid) {
+      const held = await rowForPaymentIntent(db, pid);
+      if (held) return await bookHeldCheckout(env, ctx, db, req, held, pid, cors);
+    }
+
+    // Below: a booking with no deposit (free treatment), or a PaymentIntent with no checkout
+    // row (created before holds existed).
     const t = await db.prepare('SELECT * FROM treatments WHERE id = ? AND active = 1').bind(b.treatment).first();
     const addons = await lookupAddons(db, b.addons ?? b.addon);
     if (addons === undefined) return json({ error: 'unknown_addon' }, 400, cors);
@@ -580,15 +1754,9 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     const duration = t.duration_min + addons.reduce((s, a) => s + a.duration_min, 0);
     const price = t.price_aud + addons.reduce((s, a) => s + a.price_aud, 0);
     const addonNames = addons.map(a => a.name).join(' + ');
-    const now = nowInAdelaide();
-    const open = await slotsForDate(db, b.date, duration, now.abs);
-    if (!open.includes(startMin)) return json({ error: 'slot_unavailable' }, 409, cors);
-
-    // gentle abuse cap: max 2 upcoming bookings per phone/email
-    const dup = await db.prepare(
-      "SELECT COUNT(*) AS n FROM bookings WHERE status='confirmed' AND date >= ? AND (phone = ? OR (email != '' AND email = ?))"
-    ).bind(now.date, phone, email || ' ').first();
-    if (dup.n >= 2) return json({ error: 'too_many_bookings' }, 429, cors);
+    const nowMs = Date.now();
+    const now = nowInAdelaide(nowMs);
+    const what = t.name + (addonNames ? ' + ' + addonNames : '');
 
     // Stripe deposit. The expected amount is recomputed HERE from the treatment
     // and add-on rows already looked up above - the request body cannot influence
@@ -596,7 +1764,20 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     const depositCents = depositCentsFor(price);
     let paymentIntentId = '';
     let depositPaidCents = 0;
-    const pid = String(b.payment_intent_id || '').trim();
+    let verifiedPi = null;
+    const unbookable = { pid, name, phone, email, what, date: b.date, startMin, cors };
+
+    // Slot open + gentle abuse cap (max 2 upcoming bookings per phone/email).
+    // ⚠️ If this refuses a request that carries a succeeded payment, the customer has
+    // already paid: refund it and tell Stefani - never just return the error.
+    const blocker = await bookingBlocker(db, b.date, startMin, duration, phone, email, now, { nowMs });
+    if (blocker) {
+      if (pid) {
+        const refundedRes = await refundUnbookable(env, ctx, db, { ...unbookable, error: blocker.error, status: blocker.status });
+        if (refundedRes) return refundedRes;
+      }
+      return json({ error: blocker.error }, blocker.status, cors);
+    }
 
     // Check if this client's phone is flagged as requiring a deposit.
     // Normalise to digits only so "0489052103" and "+61489052103" both match.
@@ -628,53 +1809,39 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       }
       paymentIntentId = pid;
       depositPaidCents = pi.amount;
+      verifiedPi = pi;
     }
 
     const id = crypto.randomUUID().slice(0, 8);
     const cancelToken = crypto.randomUUID();
+    const attr = cleanAttribution(b.attribution);
     try {
       await db.prepare(
-        `INSERT INTO bookings (id, treatment_id, addon_ids, addon_names, date, start_min, end_min, name, phone, email, notes, cancel_token, created_at, stripe_payment_intent_id, deposit_paid, deposit_cents)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        `INSERT INTO bookings (id, treatment_id, addon_ids, addon_names, date, start_min, end_min, name, phone, email, notes, cancel_token, created_at, lifecycle, confirmed_at, updated_at, stripe_payment_intent_id, deposit_paid, deposit_cents, ${ATTRIBUTION_FIELDS.join(', ')})
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${ATTRIBUTION_FIELDS.map(() => '?').join(', ')})`
       ).bind(id, t.id, addons.map(a => a.id).join(','), addonNames, b.date, startMin, startMin + duration,
-             name, phone, email, notes, cancelToken, new Date().toISOString(),
-             paymentIntentId, paymentIntentId ? 1 : 0, depositPaidCents).run();
+             name, phone, email, notes, cancelToken, new Date(nowMs).toISOString(),
+             paymentIntentId ? 'deposit_paid' : 'booked_no_deposit', nowMs, nowMs,
+             paymentIntentId, paymentIntentId ? 1 : 0, depositPaidCents,
+             ...ATTRIBUTION_FIELDS.map(k => attr[k])).run();
     } catch (e) {
-      if (String(e.message || e).includes('UNIQUE')) return json({ error: 'slot_unavailable' }, 409, cors);
+      if (String(e.message || e).includes('UNIQUE')) {
+        // Someone took the slot in the instant between the check and the write.
+        // The deposit has already been verified as paid, so refund it.
+        if (paymentIntentId) {
+          const refundedRes = await refundUnbookable(env, ctx, db, { ...unbookable, pi: verifiedPi, error: 'slot_unavailable', status: 409 });
+          if (refundedRes) return refundedRes;
+        }
+        return json({ error: 'slot_unavailable' }, 409, cors);
+      }
       throw e;
     }
 
-    const what = t.name + (addonNames ? ' + ' + addonNames : '');
-    const cancelUrl = `${CANCEL_BASE}?cancel=${id}&token=${cancelToken}`;
-    ctx.waitUntil(Promise.allSettled([
-      telegram(env,
-        `\u{1F33F} <b>New Revive booking</b>\n` +
-        `${what} — ${fmtDate(b.date)}, ${fmtTime(startMin)} (${duration} min · $${price})\n` +
-        `${name} · ${phone}${email ? ' · ' + email : ''}` +
-        (notes ? `\nNotes: ${notes}` : '') +
-        (paymentIntentId ? `\n💳 ${fmtMoneyCents(depositPaidCents)} deposit paid · ${fmtMoneyCents(price * 100 - depositPaidCents)} due on the day` : '') +
-        `\nRef ${id}`
-      ),
-      sendEmail(env, email, `Booking confirmed: ${what}, ${fmtDate(b.date)} ${fmtTime(startMin)} — Revive Aesthetics`,
-        confirmationEmail({ name, what, dateLabel: fmtDate(b.date), timeLabel: fmtTime(startMin), duration, price,
-          deposit: !!paymentIntentId,
-          depositLabel: depositPaidCents ? `${fmtMoneyCents(depositPaidCents)} deposit` : '',
-          balanceLabel: depositPaidCents ? fmtMoneyCents(price * 100 - depositPaidCents) : '' }, cancelUrl,
-          treatmentForms(t.id, id, name, phone, email))),
-      // Server-side conversion. event_id === booking id, matching the browser
-      // pixel, so Meta dedupes the pair into one conversion. No-op unless the
-      // META_PIXEL_ID + META_CAPI_TOKEN secrets are set.
-      metaConversion(env, {
-        eventName: 'Schedule',
-        eventId: id,
-        email, phone, name,
-        value: price,
-        contentName: what,
-        sourceUrl: CANCEL_BASE,
-        clientIp: req.headers.get('cf-connecting-ip') || '',
-        userAgent: req.headers.get('user-agent') || '',
-      }),
-    ]));
+    const created = await db.prepare('SELECT * FROM bookings WHERE id = ?').bind(id).first();
+    ctx.waitUntil(notifyBookingConfirmed(env, db, created, {
+      clientIp: req.headers.get('cf-connecting-ip') || '',
+      userAgent: req.headers.get('user-agent') || '',
+    }));
 
     return json({
       ok: true, id, cancel_token: cancelToken,
@@ -747,9 +1914,9 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     const row = await lookupBooking(db, b.id, b.token);
     if (!row) return json({ error: 'not_found' }, 404, cors);
     if (row.status === 'confirmed') {
-      await db.prepare("UPDATE bookings SET status='cancelled', cancelled_at=? WHERE id=?")
+      const res = await db.prepare("UPDATE bookings SET status='cancelled', lifecycle='cancelled', cancelled_at=? WHERE id=? AND status='confirmed'")
         .bind(new Date().toISOString(), row.id).run();
-      ctx.waitUntil(Promise.allSettled([
+      if (changesOf(res) === 1) ctx.waitUntil(Promise.allSettled([
         telegram(env,
           `❌ <b>Revive booking cancelled</b>\n${row.tname}${row.aname ? ' + ' + row.aname : ''} — ${fmtDate(row.date)}, ${fmtTime(row.start_min)}\n${row.name} · ${row.phone}\nRef ${row.id}`
         ),
@@ -973,7 +2140,7 @@ async function lookupBooking(db, id, token) {
   return db.prepare(
     `SELECT b.*, t.name AS tname, b.addon_names AS aname
      FROM bookings b JOIN treatments t ON t.id = b.treatment_id
-     WHERE b.id = ? AND b.cancel_token = ?`
+     WHERE b.id = ? AND b.cancel_token = ? AND b.status IN ('confirmed', 'cancelled')`
   ).bind(String(id), String(token)).first();
 }
 
@@ -1000,12 +2167,18 @@ async function handleAdmin(req, env, url, path, cors) {
   if (path === '/api/admin/bookings' && req.method === 'GET') {
     const from = isDateStr(url.searchParams.get('from')) ? url.searchParams.get('from') : nowInAdelaide().date;
     const to = isDateStr(url.searchParams.get('to')) ? url.searchParams.get('to') : addDays(from, 30);
+    // A checkout in progress (pending) or one that never paid (abandoned) is NOT an
+    // appointment and must never reach the diary or a client's history. ?include=all
+    // shows them deliberately, for troubleshooting.
+    const includeAll = url.searchParams.get('include') === 'all';
     const { results } = await db.prepare(
       `SELECT b.id, b.date, b.start_min, b.end_min, b.status, b.name, b.phone, b.email, b.notes,
               b.created_at, b.addon_ids, t.name AS treatment, t.price_aud, b.addon_names AS addon,
-              b.price_override, b.deposit_paid, b.deposit_cents, b.stripe_payment_intent_id
+              b.price_override, b.deposit_paid, b.deposit_cents, b.stripe_payment_intent_id,
+              b.lifecycle, b.refunded_cents, ${ATTRIBUTION_FIELDS.map(k => 'b.' + k).join(', ')}
        FROM bookings b JOIN treatments t ON t.id = b.treatment_id
-       WHERE b.date BETWEEN ? AND ? ORDER BY b.date, b.start_min`
+       WHERE b.date BETWEEN ? AND ?${includeAll ? '' : " AND b.status IN ('confirmed', 'cancelled')"}
+       ORDER BY b.date, b.start_min`
     ).bind(from, to).all();
     const priceOf = await makePriceOf(db);
     return json({
@@ -1019,6 +2192,7 @@ async function handleAdmin(req, env, url, path, cors) {
         // included so she can find the charge in Stripe without searching by name.
         deposit_label: r.deposit_cents ? fmtMoneyCents(r.deposit_cents) : '',
         deposit_cents: r.deposit_cents || 0,
+        refunded_cents: r.refunded_cents || 0,
         stripe_payment_intent_id: undefined,
         stripe_ref: r.stripe_payment_intent_id || '',
         time_label: fmtTime(r.start_min), date_label: fmtDate(r.date),
@@ -1140,8 +2314,8 @@ async function handleAdmin(req, env, url, path, cors) {
     if (start === null || end === null || end <= start) return json({ error: 'bad_times' }, 400, cors);
     const id = crypto.randomUUID();
     await db.prepare(
-      `INSERT OR IGNORE INTO bookings (id, treatment_id, addon_ids, addon_names, date, start_min, end_min, name, phone, email, notes, status, reminded, cancel_token, created_at)
-       VALUES (?, 'consultation', '', '', ?, ?, ?, ?, '', '', ?, 'confirmed', 0, ?, ?)`
+      `INSERT OR IGNORE INTO bookings (id, treatment_id, addon_ids, addon_names, date, start_min, end_min, name, phone, email, notes, status, reminded, cancel_token, created_at, lifecycle)
+       VALUES (?, 'consultation', '', '', ?, ?, ?, ?, '', '', ?, 'confirmed', 0, ?, ?, 'booked_no_deposit')`
     ).bind(id, b.date, start, end, String(b.name || 'BLOCKED').slice(0, 100),
       String(b.notes || 'Admin block').slice(0, 500), crypto.randomUUID(), new Date().toISOString()).run();
     return json({ ok: true, id }, 200, cors);
@@ -1149,7 +2323,8 @@ async function handleAdmin(req, env, url, path, cors) {
 
   if (path === '/api/admin/cancel' && req.method === 'POST') {
     const b = await req.json().catch(() => ({}));
-    await db.prepare("UPDATE bookings SET status='cancelled', cancelled_at=? WHERE id=?")
+    // Only a real appointment can be cancelled; a pending checkout is not one.
+    await db.prepare("UPDATE bookings SET status='cancelled', lifecycle='cancelled', cancelled_at=? WHERE id=? AND status='confirmed'")
       .bind(new Date().toISOString(), String(b.id || '')).run();
     return json({ ok: true }, 200, cors);
   }
@@ -1249,7 +2424,27 @@ async function handleAdmin(req, env, url, path, cors) {
         created_at      TEXT DEFAULT (datetime('now'))
       )`
     ).run();
-    return json({ ok: true }, 200, cors);
+    // Booking lifecycle + checkout holds + stripe_events — added 2026-09-14. Adds any missing
+    // columns, creates stripe_events and backfills lifecycle on every existing row. It also
+    // runs lazily on the first request of each isolate; this is belt and braces.
+    const backfilled = await ensureBookingSchema(db, Date.now(), true);
+    return json({ ok: true, lifecycle_backfilled: backfilled }, 200, cors);
+  }
+
+  // Deposit funnel + money for bookings STARTED on Adelaide days from..to (inclusive).
+  if (path === '/api/admin/report' && req.method === 'GET') {
+    const from = url.searchParams.get('from');
+    const to = url.searchParams.get('to');
+    if (!isDateStr(from) || !isDateStr(to) || from > to) return json({ error: 'bad_range' }, 400, cors);
+    // Coarse prefilter on the stored text with two days of padding either side; the exact
+    // Adelaide-day filter happens in aggregateDepositReport, which converts each instant.
+    const { results } = await db.prepare(
+      `SELECT b.*, t.price_aud AS treatment_price_aud FROM bookings b LEFT JOIN treatments t ON t.id = b.treatment_id
+       WHERE b.created_at >= ? AND b.created_at < ?`
+    ).bind(addDays(from, -2), addDays(to, 3)).all();
+    const priceOf = await makePriceOf(db);
+    return json(aggregateDepositReport(results, from, to,
+      r => priceOf({ price_aud: r.treatment_price_aud || 0, addon_ids: r.addon_ids })), 200, cors);
   }
 
   if (path === '/api/admin/client-flags' && req.method === 'GET') {

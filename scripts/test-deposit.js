@@ -131,16 +131,33 @@ function extract(sig) {
   // deposit step can be skipped by POSTing straight to the API.
   ok(/error: 'deposit_required'/.test(bkBlock),
     '/api/book refuses a payable booking that arrives with no deposit');
-  ok(/depositCents > 0 && env\.STRIPE_SECRET_KEY && !pid/.test(bkBlock),
-    'the refusal is gated on a deposit being owed AND payments working');
-
-  // Graceful degradation: if Stripe is misconfigured, take the booking rather
-  // than lose it. Silence costs more than a missing deposit.
-  ok(/env\.STRIPE_SECRET_KEY && !pid/.test(bkBlock),
-    'no Stripe key configured => booking still allowed (fails open, not shut)');
+  // Since 8 Sept (client_flags) the gate is: a deposit is owed, no payment is attached, and
+  // EITHER payments are live OR the client is flagged as must-pay. The expression is lifted
+  // out of the worker and its truth table executed, so a reordering that changes behaviour fails.
+  const gateM = bkBlock.match(/if \((depositCents > 0 && !pid && \(env\.STRIPE_SECRET_KEY \|\| requiresDeposit\))\) \{/);
+  ok(!!gateM, 'the refusal is gated on a deposit being owed, no payment attached, AND (payments working OR the client flagged)');
+  if (gateM) {
+    const refuse = new Function('depositCents', 'pid', 'env', 'requiresDeposit', 'return !!(' + gateM[1] + ');');
+    ok(refuse(2850, '', { STRIPE_SECRET_KEY: 'sk' }, false) === true,
+      'deposit owed + payments live + no payment attached => refused');
+    ok(refuse(2850, 'pi_1', { STRIPE_SECRET_KEY: 'sk' }, false) === false,
+      'a payment attached => not refused by the gate (it is verified with Stripe next)');
+    ok(refuse(0, '', { STRIPE_SECRET_KEY: 'sk' }, true) === false, 'a free booking is never refused, flagged or not');
+    // Graceful degradation: if Stripe is misconfigured, take the booking rather
+    // than lose it. Silence costs more than a missing deposit.
+    ok(refuse(2850, '', {}, false) === false,
+      'no Stripe key configured => booking still allowed (fails open, not shut)');
+    // ...except for a client Stefani flagged as must-pay: she is told to call instead.
+    ok(refuse(2850, '', {}, true) === true, 'no Stripe key but the client is flagged => refused');
+  }
+  ok(/requiresDeposit && !env\.STRIPE_SECRET_KEY[\s\S]{0,120}Please call Stefani on 0404 967 051/.test(bkBlock),
+    'a flagged client refused while payments are down is told to call Stefani');
 
   // The amount taken is recorded, so a refund can be made correctly.
-  ok(/deposit_cents\)/.test(bkBlock) && /depositPaidCents\)\.run\(\)/.test(bkBlock),
+  // (2026-09-16: the attribution columns now follow deposit_cents, so allow that suffix -
+  // the deposit column and its bound value must still be present in the same INSERT.)
+  ok(/deposit_cents(\)|, \$\{ATTRIBUTION_FIELDS)/.test(bkBlock) &&
+     /depositPaidCents(,\s*\.\.\.ATTRIBUTION_FIELDS\.map\([^)]*\))?\)\.run\(\)/.test(bkBlock),
     'the amount actually taken is stored on the booking');
   ok(/ALTER TABLE bookings ADD COLUMN deposit_cents INTEGER DEFAULT 0/.test(WORKER),
     'the deposit_cents column is created by migrate');

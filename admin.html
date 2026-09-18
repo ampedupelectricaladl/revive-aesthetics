@@ -58,6 +58,17 @@
   .stat { background:var(--plum); color:var(--cream); text-align:center; padding:16px 8px; }
   .stat .n { font-family:'Cormorant Garamond',serif; font-size:1.7rem; color:var(--gold); }
   .stat .l { font-size:.62rem; letter-spacing:.18em; text-transform:uppercase; opacity:.8; }
+  .stat-row.four { grid-template-columns:repeat(2,1fr); }
+  @media (min-width:560px) { .stat-row.four { grid-template-columns:repeat(4,1fr); } }
+  .stat.owe { background:#8c2f39; }
+  .stat.owe .n { color:var(--cream); }
+
+  /* What to collect on the day. A deposit is NOT always paid - bookings made before
+     online deposits existed have none, and the full price must be collected. */
+  .collect { font-size:.8rem; margin:4px 0 2px; letter-spacing:.02em; }
+  .collect.paid { color:#8a7550; }
+  .collect.nodep { display:inline-block; background:#8c2f39; color:var(--cream); font-weight:500;
+    letter-spacing:.1em; text-transform:uppercase; font-size:.74rem; padding:5px 11px; margin:6px 0 4px; }
 
   .block-form { display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap; }
   .block-form input { padding:12px; border:1px solid rgba(43,15,26,.18); font-family:'Jost',sans-serif; }
@@ -147,7 +158,35 @@
 
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s || '').replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-  function money(n) { return '$' + Number(n || 0).toLocaleString('en-AU'); }
+  // Whole dollars stay "$95"; anything with cents always shows two places ("$66.50").
+  function money(n) {
+    var v = Math.round(Number(n || 0) * 100) / 100;
+    var whole = v === Math.round(v);
+    return '$' + v.toLocaleString('en-AU', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });
+  }
+  // What is still owed on the day, worked in cents so $95 - $28.50 is exactly $66.50.
+  // state: 'free' (no price), 'paid' (deposit taken), 'nodeposit' (collect the full price).
+  function collectInfo(b) {
+    var priceCents = Math.round(Number(b.price_aud || 0) * 100);
+    if (!(priceCents > 0)) return { state: 'free', deposit: 0, collect: 0 };
+    var depCents = Math.round(Number(b.deposit_cents || 0));
+    if (b.deposit_paid === true && depCents > 0) {
+      return { state: 'paid', deposit: depCents / 100, collect: Math.max(0, priceCents - depCents) / 100 };
+    }
+    return { state: 'nodeposit', deposit: 0, collect: priceCents / 100 };
+  }
+  function collectHtml(b) {
+    if (b.status === 'cancelled') return '';
+    // Past appointments were settled in person - a red "collect" badge on them is noise.
+    if (b.date && b.date < adlToday()) return '';
+    var c = collectInfo(b);
+    if (c.state === 'paid') {
+      return '<div class="collect paid">Deposit ' + money(c.deposit) + ' paid · ' +
+        (c.collect > 0 ? 'collect ' + money(c.collect) : 'nothing to collect') + '</div>';
+    }
+    if (c.state === 'nodeposit') return '<div class="collect nodep">No deposit · collect ' + money(c.collect) + '</div>';
+    return '';
+  }
   function fail(code, msg) { var e = new Error(msg); e.code = code; return e; }
   function api(path, opts) {
     opts = opts || {};
@@ -202,7 +241,15 @@
     var p = d.split('-'); var dt = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
     return dt.toLocaleDateString('en-AU', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
   }
-  function plusDays(n) { var d = new Date(Date.now() + n * 864e5); return d.toISOString().slice(0, 10); }
+  // The studio runs on Adelaide time. toISOString() is UTC, which until 9:30am
+  // still reads as yesterday and kept yesterday's clients in the diary.
+  function adlToday() {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Adelaide', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  }
+  function plusDays(n) {
+    var p = adlToday().split('-');
+    return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]) + n * 864e5).toISOString().slice(0, 10);
+  }
 
   // ---------- Diary ----------
   function loadDiary(showPast) {
@@ -210,7 +257,7 @@
     api('/api/admin/bookings?from=' + from + '&to=' + plusDays(62)).then(function (r) {
       var v = $('v-diary');
       var all = r.bookings.filter(function (b) { return b.status === 'confirmed'; });
-      var today = new Date().toISOString().slice(0, 10);
+      var today = adlToday();
       var upcoming = showPast ? all : all.filter(function (b) { return b.date >= today; });
       var past = showPast ? all.filter(function (b) { return b.date < today; }) : [];
       var toggleBtn = '<div style="text-align:right;margin-bottom:14px;">' +
@@ -220,15 +267,20 @@
       var byDate = {};
       upcoming.forEach(function (b) { (byDate[b.date] = byDate[b.date] || []).push(b); });
       var revenue = upcoming.reduce(function (s, b) { return s + (b.price_aud || 0); }, 0);
-      var html = toggleBtn + '<div class="stat-row">' +
+      // Still to collect across upcoming confirmed bookings (today onwards), in cents.
+      var toCollectCents = all.filter(function (b) { return b.date >= today; })
+        .reduce(function (s, b) { return s + Math.round(collectInfo(b).collect * 100); }, 0);
+      var html = toggleBtn + '<div class="stat-row four">' +
         '<div class="stat"><div class="n">' + upcoming.length + '</div><div class="l">Upcoming</div></div>' +
         '<div class="stat"><div class="n">' + Object.keys(byDate).length + '</div><div class="l">Days</div></div>' +
-        '<div class="stat"><div class="n">' + money(revenue) + '</div><div class="l">Booked $</div></div></div>';
+        '<div class="stat"><div class="n">' + money(revenue) + '</div><div class="l">Booked $</div></div>' +
+        '<div class="stat' + (toCollectCents > 0 ? ' owe' : '') + '" id="stat-collect"><div class="n">' + money(toCollectCents / 100) + '</div><div class="l">To collect</div></div></div>';
       Object.keys(byDate).sort().forEach(function (d) {
         html += '<div class="day-head"><span>' + dayLabel(d) + '</span><span class="cnt">' + byDate[d].length + ' client' + (byDate[d].length > 1 ? 's' : '') + '</span></div>';
         byDate[d].forEach(function (b) {
           html += '<div class="card" id="bk-' + b.id + '">' +
             '<div class="bk-row1"><span class="bk-time">' + b.time_label + '</span><span class="bk-price">' + money(b.price_aud) + '</span></div>' +
+            collectHtml(b) +
             '<div class="bk-what">' + esc(b.treatment) + (b.addon ? ' + ' + esc(b.addon) : '') + '</div>' +
             '<div class="bk-name">' + esc(b.name) + '</div>' +
             '<div class="bk-contact">' +
@@ -251,6 +303,7 @@
           pastByDate[d].forEach(function (b) {
             html += '<div class="card" style="opacity:.7;">' +
               '<div class="bk-row1"><span class="bk-time">' + b.time_label + '</span><span class="bk-price">' + money(b.price_aud) + '</span></div>' +
+              collectHtml(b) +
               '<div class="bk-what">' + esc(b.treatment) + (b.addon ? ' + ' + esc(b.addon) : '') + '</div>' +
               '<div class="bk-name">' + esc(b.name) + '</div>' +
               '<div class="bk-contact">' +
@@ -318,6 +371,7 @@
                 '<span style="font-family:\'Cormorant Garamond\',serif;font-size:1.05rem;">' + esc(b.date_label || b.date) + '</span>' +
                 (isCancelled ? ' <span style="font-size:.7rem;color:var(--rose);letter-spacing:.1em;">CANCELLED</span>' : '') +
                 '<div style="font-size:.82rem;color:var(--muted);">' + esc(b.treatment) + (b.addon ? ' + ' + esc(b.addon) : '') + ' · ' + esc(b.time_label) + '</div>' +
+                collectHtml(b) +
               '</div>' +
               '<span style="color:var(--gold);font-family:\'Cormorant Garamond\',serif;">' + (b.price_aud > 0 ? money(b.price_aud) : '') + '</span>' +
             '</div>';
