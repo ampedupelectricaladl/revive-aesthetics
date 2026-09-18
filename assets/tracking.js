@@ -23,7 +23,7 @@
   'use strict';
 
   // Empty string = tracking disabled. This is the only line to change.
-  var PIXEL_ID = '';
+  var PIXEL_ID = '1124493476890951';
 
   // Pages that must NEVER be tracked, even once a pixel id is set.
   // These collect medical history or are Stefani's own admin tooling. Firing a

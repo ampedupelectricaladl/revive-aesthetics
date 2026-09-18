@@ -67,14 +67,16 @@ function loadTracking({ pixelId, pathname }) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Disabled by default
+// 1. Ships with Revive's own pixel; an empty id still switches tracking off
 // ---------------------------------------------------------------------------
 {
+  // Switched on 2026-09-18 with the pixel Stefani created in Events Manager.
+  // Any other id (a typo, or another business's pixel) must fail here.
   const src = fs.readFileSync(TRACKING, 'utf8');
-  ok(/var PIXEL_ID = '';/.test(src),
-    'tracking.js ships with an EMPTY pixel id (never commit a live id by accident)');
+  ok(/var PIXEL_ID = '1124493476890951';/.test(src),
+    "tracking.js ships with Revive's own pixel id and no other");
 
-  const r = loadTracking({ pathname: '/book.html' });
+  const r = loadTracking({ pixelId: '', pathname: '/book.html' });
   ok(r.injected.length === 0, 'disabled: injects no script tag');
   ok(typeof r.track === 'function', 'disabled: reviveTrack is still defined');
   let threw = false;
