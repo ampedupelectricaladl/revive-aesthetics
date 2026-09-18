@@ -1,0 +1,3 @@
+# Local Claude Code settings: deny rules that name secret-file paths on this box.
+# The repo is PUBLIC, so they must never be committed.
+.claude/settings.local.json
