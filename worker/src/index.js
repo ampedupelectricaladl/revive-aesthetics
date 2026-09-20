@@ -1131,20 +1131,42 @@ async function handleAdmin(req, env, url, path, cors) {
     return json({ ok: true }, 200, cors);
   }
 
-  // Silent admin booking — no email, no Telegram. Used to block specific slots.
+  // Silent admin booking — no email, no Telegram. Accepts full client details.
   if (path === '/api/admin/book' && req.method === 'POST') {
     const b = await req.json().catch(() => ({}));
     if (!isDateStr(b.date)) return json({ error: 'bad_date' }, 400, cors);
     const start = typeof b.start_min === 'number' ? b.start_min : null;
     const end = typeof b.end_min === 'number' ? b.end_min : null;
     if (start === null || end === null || end <= start) return json({ error: 'bad_times' }, 400, cors);
-    const id = crypto.randomUUID();
+    const treatmentId = String(b.treatment_id || 'consultation');
+    const id = b.id || crypto.randomUUID();
     await db.prepare(
       `INSERT OR IGNORE INTO bookings (id, treatment_id, addon_ids, addon_names, date, start_min, end_min, name, phone, email, notes, status, reminded, cancel_token, created_at)
-       VALUES (?, 'consultation', '', '', ?, ?, ?, ?, '', '', ?, 'confirmed', 0, ?, ?)`
-    ).bind(id, b.date, start, end, String(b.name || 'BLOCKED').slice(0, 100),
-      String(b.notes || 'Admin block').slice(0, 500), crypto.randomUUID(), new Date().toISOString()).run();
+       VALUES (?, ?, '', '', ?, ?, ?, ?, ?, ?, ?, 'confirmed', 0, ?, ?)`
+    ).bind(id, treatmentId, b.date, start, end,
+      String(b.name || 'BLOCKED').slice(0, 100),
+      String(b.phone || '').slice(0, 30),
+      String(b.email || '').slice(0, 100),
+      String(b.notes || 'Admin block').slice(0, 500),
+      crypto.randomUUID(), new Date().toISOString()).run();
     return json({ ok: true, id }, 200, cors);
+  }
+
+  // Update an existing booking's treatment, client details or notes (silent — no email).
+  if (path === '/api/admin/update-booking' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    if (!b.id) return json({ error: 'missing_id' }, 400, cors);
+    const sets = [];
+    const vals = [];
+    if (b.treatment_id) { sets.push('treatment_id = ?'); vals.push(String(b.treatment_id)); }
+    if (b.name)         { sets.push('name = ?');         vals.push(String(b.name).slice(0, 100)); }
+    if (b.phone !== undefined) { sets.push('phone = ?'); vals.push(String(b.phone).slice(0, 30)); }
+    if (b.email !== undefined) { sets.push('email = ?'); vals.push(String(b.email).slice(0, 100)); }
+    if (b.notes !== undefined) { sets.push('notes = ?'); vals.push(String(b.notes).slice(0, 500)); }
+    if (sets.length === 0) return json({ error: 'nothing_to_update' }, 400, cors);
+    vals.push(String(b.id));
+    await db.prepare(`UPDATE bookings SET ${sets.join(', ')} WHERE id = ?`).bind(...vals).run();
+    return json({ ok: true }, 200, cors);
   }
 
   if (path === '/api/admin/cancel' && req.method === 'POST') {
