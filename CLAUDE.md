@@ -45,6 +45,12 @@ content, and help run her business, the same way Marcus's assistant helps him.
   - `schema.sql` — tables + seed treatments/add-ons.
   - `deploy.sh` — one-shot deploy (D1 → schema → deploy → secrets → wires API URL → pushes site).
 
+## Lash lift safety rule (Marcus, 20 Sept 2026)
+- **A lash lift touch-up is NEVER offered or booked inside six weeks of the client's last lift.**
+  Under four weeks damages the lashes. Before suggesting a date for a repeat lash lift, look up her
+  last lash booking and only offer dates on or after last visit + 42 days. If she asks for earlier,
+  say it is too soon for her lashes and offer the first safe Mon/Tue.
+
 ## How to do common jobs
 - **⚠️ ALWAYS run `node scripts/check-pages.js` before you commit a page.** It
   compiles every inline `<script>` and refuses anything that would not parse.

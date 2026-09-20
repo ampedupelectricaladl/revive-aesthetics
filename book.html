@@ -144,11 +144,11 @@
   form { display: grid; gap: 16px; }
   .field { display: grid; gap: 6px; }
   label { font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
-  input, textarea {
+  input, textarea, select {
     font-family: 'Jost', sans-serif; font-size: 0.98rem; padding: 13px 14px;
     border: 1px solid rgba(43,15,26,0.18); background: #fff; color: var(--ink); border-radius: 0; width: 100%;
   }
-  input:focus, textarea:focus { outline: none; border-color: var(--plum); }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--plum); }
   textarea { resize: vertical; min-height: 90px; }
   .hp { position: absolute; left: -9999px; opacity: 0; height: 0; overflow: hidden; }
   .policy-agree { margin: 18px 0 14px; }
@@ -267,6 +267,16 @@
         <div class="field"><label for="f-name">Name</label><input id="f-name" required autocomplete="name" /></div>
         <div class="field"><label for="f-phone">Phone</label><input id="f-phone" type="tel" required autocomplete="tel" /></div>
         <div class="field"><label for="f-email">Email</label><input id="f-email" type="email" required autocomplete="email" /></div>
+        <div class="field"><label for="f-source">How did you hear about us? <span style="text-transform:none;letter-spacing:0;">(optional)</span></label>
+          <select id="f-source">
+            <option value="">&mdash;</option>
+            <option value="Instagram">Instagram</option>
+            <option value="Facebook">Facebook</option>
+            <option value="Google">Google</option>
+            <option value="A friend">A friend</option>
+            <option value="Walked past the studio">Walked past the studio</option>
+            <option value="Other">Other</option>
+          </select></div>
         <div class="field"><label for="f-notes">Anything Stefani should know? <span style="text-transform:none;letter-spacing:0;">(optional)</span></label>
           <textarea id="f-notes" placeholder="Skin concerns, first visit, current products..."></textarea></div>
         <div class="hp"><label>Website</label><input id="f-website" tabindex="-1" autocomplete="off" /></div>
@@ -375,6 +385,35 @@
   var STRIPE_PK = 'pk_live_51TrJ2lFjfVooeQfRTJ5AO02cewfIhzBuNQeKC5yHFdUXQjNgzG6tamTfb3WW8KM0dFKvugq3KTxah6KD2Rxick7H00uOkxYzLA';
   var state = { treatment: null, sel: [], addons: [], availability: null, date: null, min: null, timeLabel: '',
                 formData: null, stripe: null, cardElement: null };
+
+  // Static copy of the live treatment list, ONLY so the grid is never blank on
+  // first paint. Two thirds of 394 Instagram ad taps died on "Loading
+  // treatments..." because the in-app browser had not finished the API call yet.
+  // The live list from /api/treatments replaces this the moment it arrives -
+  // prices shown to a client always come from the server, never from here.
+  var FALLBACK_TREATMENTS = [
+    { id: 'lash-lift', name: 'Korean Lash Lift & Tint', duration_min: 75, price_aud: 95,
+      description: 'Korean lash lift and tint treatment.' },
+    { id: 'consultation', name: 'Consultation', duration_min: 15, price_aud: 0,
+      description: 'A personalised skin consultation to assess your skin, discuss your concerns and build a treatment plan tailored to you.' },
+    { id: 'microneedling', name: 'PDRN Microneedling Booster', duration_min: 60, price_aud: 299,
+      description: 'Collagen-induction microneedling boosted with PDRN - supports skin repair, softens scarring, smooths texture and improves firmness for a fresher, plumper complexion.' },
+    { id: 'lymphatic', name: 'Lymphatic Stomach Drainage Massage', duration_min: 45, price_aud: 99,
+      description: "A targeted abdominal massage that stimulates the lymphatic system to reduce bloating, ease puffiness and support your body's natural detoxification." }
+  ];
+
+  // Lash lift is the ad spend, so it leads; the free consultation is the easiest
+  // yes, so it sits second. Anything else keeps the order the server sent.
+  var TREATMENT_ORDER = ['lash-lift', 'consultation'];
+  function orderTreatments(list) {
+    var rank = function (t) {
+      var i = TREATMENT_ORDER.indexOf(t.id);
+      return i === -1 ? TREATMENT_ORDER.length : i;
+    };
+    return list.map(function (t, i) { return { t: t, i: i }; })
+      .sort(function (a, b) { return (rank(a.t) - rank(b.t)) || (a.i - b.i); })
+      .map(function (x) { return x.t; });
+  }
   function selDur() { return state.sel.reduce(function (s, a) { return s + a.duration_min; }, 0); }
   function selPrice() { return state.sel.reduce(function (s, a) { return s + a.price_aud; }, 0); }
   function selNames() { return state.sel.map(function (a) { return a.name; }).join(' + '); }
@@ -421,6 +460,41 @@
 
   // ---- cancel flow via ?cancel=<id>&token=<t> ----
   var qs = new URLSearchParams(location.search);
+
+  // ---- ad attribution ----------------------------------------------------
+  // Instagram appends fbclid; our own links add utm_* and src. The booking flow
+  // is four steps and the client may reload, so the parameters are parked in
+  // sessionStorage the moment the page opens and read back at submit time. They
+  // ride into the EXISTING notes field - no new API field, no new call shape.
+  var ATTR_KEY = 'revive_attr';
+  function readAttribution() {
+    try { return JSON.parse(sessionStorage.getItem(ATTR_KEY) || '{}') || {}; }
+    catch (e) { return {}; }
+  }
+  (function captureAttribution() {
+    var stored = readAttribution();
+    ['fbclid', 'utm_source', 'utm_campaign', 'src', 't'].forEach(function (k) {
+      var v = (qs.get(k) || '').trim();
+      if (v) stored[k] = v.slice(0, 120);
+    });
+    try { sessionStorage.setItem(ATTR_KEY, JSON.stringify(stored)); } catch (e) { /* private mode */ }
+  })();
+  function sourceLabel() {
+    var a = readAttribution();
+    if (a.fbclid) return 'Instagram ad (fbclid)';
+    if (a.utm_source) return a.utm_source;
+    if (a.src) return a.src;
+    return 'direct';
+  }
+  // Short on purpose: the worker truncates notes at 800 chars and the client's
+  // own words must survive that, so the prefix stays one line.
+  function notesWithAttribution(clientNotes) {
+    var sel = $('f-source');
+    var heard = (sel && sel.value ? sel.value : '').trim() || 'not answered';
+    return ('Heard via: ' + heard + ' | Source: ' + sourceLabel() + '\n' +
+            (clientNotes || '')).slice(0, 800);
+  }
+
   if (qs.get('cancel') && qs.get('token')) {
     if (!API) { show('p-offline', null); return; }
     show('p-cancel', null);
@@ -449,11 +523,10 @@
   if (!API) { show('p-offline', null); return; }
   show('p-treatment', 1);
 
-  api('/api/treatments').then(function (r) {
-    $('t-loading').style.display = 'none';
-    state.addons = r.data.addons || [];
+  function renderTreatments(list) {
     var grid = $('t-grid');
-    r.data.treatments.forEach(function (t) {
+    grid.innerHTML = '';
+    orderTreatments(list).forEach(function (t) {
       var card = document.createElement('div');
       card.className = 't-card';
       card.innerHTML = '<div><h3>' + t.name + '</h3><p>' + t.description + '</p></div>' +
@@ -462,11 +535,28 @@
       card.addEventListener('click', function () { pickTreatment(t); });
       grid.appendChild(card);
     });
+  }
+
+  // First paint, synchronously, before any network call. No spinner, no blank.
+  $('t-loading').style.display = 'none';
+  renderTreatments(FALLBACK_TREATMENTS);
+
+  api('/api/treatments').then(function (r) {
+    $('t-loading').style.display = 'none';
+    state.addons = r.data.addons || [];
+    var live = r.data.treatments || [];
+    if (live.length) renderTreatments(live);
+    // If the client already tapped a fallback card, swap in the server's copy of
+    // it so the price and duration on screen are the live ones.
+    if (state.treatment) {
+      var cur = live.filter(function (t) { return t.id === state.treatment.id; })[0];
+      if (cur) { state.treatment = cur; updateTimeSub(); renderAddons(); }
+    }
     // Ad links can open straight on one treatment: book.html?t=lash-lift
     // An unknown or missing id just shows the normal list. 'Back' still returns to it.
     var wantT = (qs.get('t') || '').trim();
-    if (wantT) {
-      var hit = r.data.treatments.filter(function (t) { return t.id === wantT; })[0];
+    if (wantT && !state.treatment) {
+      var hit = live.filter(function (t) { return t.id === wantT; })[0];
       if (hit) pickTreatment(hit);
     }
   }).catch(function () { show('p-offline', null); });
@@ -594,7 +684,7 @@
       treatment: state.treatment.id, addons: state.sel.map(function (a) { return a.id; }),
       date: state.date, start_min: state.min,
       name: $('f-name').value, phone: $('f-phone').value,
-      email: $('f-email').value, notes: $('f-notes').value,
+      email: $('f-email').value, notes: notesWithAttribution($('f-notes').value),
       website: $('f-website').value,
     };
     if (hasDeposit()) { goToDeposit(); return; }
