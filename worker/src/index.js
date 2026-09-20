@@ -91,21 +91,27 @@ const isDateStr = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
 // ---------- availability ----------
 
 async function slotsForDate(db, dateStr, durationMin, nowAbs) {
-  if (!OPEN_DAYS.includes(dayOfWeek(dateStr))) return [];
+  // A blocked date is closed no matter what - it wins over every override below.
   const blocked = await db.prepare('SELECT 1 FROM blocked_dates WHERE date = ?').bind(dateStr).first();
   if (blocked) return [];
-  const { results: taken } = await db.prepare(
-    "SELECT start_min, end_min FROM bookings WHERE date = ? AND status = 'confirmed'"
-  ).bind(dateStr).all();
 
   // Slot overrides: if any rows exist for this date, only those start_min values are candidates.
+  // Read BEFORE the open-day test: a pinned date opens even when its weekday is not in
+  // OPEN_DAYS, which is how Stefani runs the one Saturday morning trial (decided 20 Sept 2026).
   let allowedSet = null;
   try {
     const { results: overrides } = await db.prepare(
       'SELECT start_min FROM slot_overrides WHERE date = ?'
     ).bind(dateStr).all();
     if (overrides.length > 0) allowedSet = new Set(overrides.map(o => o.start_min));
-  } catch (_) { /* table not yet migrated — treat as no overrides */ }
+  } catch (_) { /* table not yet migrated - treat as no overrides */ }
+
+  // Non-open weekday with nothing pinned: still closed.
+  if (!allowedSet && !OPEN_DAYS.includes(dayOfWeek(dateStr))) return [];
+
+  const { results: taken } = await db.prepare(
+    "SELECT start_min, end_min FROM bookings WHERE date = ? AND status = 'confirmed'"
+  ).bind(dateStr).all();
 
   const slots = [];
   if (allowedSet) {
@@ -511,11 +517,22 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     if (!isDateStr(from) || from < now.date) from = now.date;
     const days = Math.min(parseInt(url.searchParams.get('days') || '60', 10) || 60, HORIZON_DAYS);
     const lastAllowed = addDays(now.date, HORIZON_DAYS);
+    // One query for every pinned date in the window, so the loop can keep its cheap
+    // skip without hiding a Saturday that Stefani has deliberately opened.
+    const pinnedDates = new Set();
+    try {
+      const { results: pinned } = await db.prepare(
+        'SELECT DISTINCT date FROM slot_overrides WHERE date BETWEEN ? AND ?'
+      ).bind(from, addDays(from, days)).all();
+      for (const r of pinned) pinnedDates.add(r.date);
+    } catch (_) { /* table not yet migrated - no pinned dates */ }
     const dates = {};
     for (let i = 0; i < days; i++) {
       const d = addDays(from, i);
       if (d > lastAllowed) break;
-      if (!OPEN_DAYS.includes(dayOfWeek(d))) continue; // cheap skip before hitting D1
+      // Skip only days that are neither an open weekday nor pinned open via slot_overrides
+      // (the Saturday trial, 20 Sept 2026). `pinnedDates` is one query, fetched above the loop.
+      if (!OPEN_DAYS.includes(dayOfWeek(d)) && !pinnedDates.has(d)) continue;
       const slots = await slotsForDate(db, d, duration, now.abs);
       if (slots.length) dates[d] = slots.map(m => ({ min: m, label: fmtTime(m) }));
     }

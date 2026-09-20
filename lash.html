@@ -66,6 +66,8 @@
   .hero h1 { font-size: clamp(2.1rem, 9vw, 3rem); }
   .hero h1 em { font-style: italic; color: var(--gold); }
   .hero .price { font-family: 'Cormorant Garamond', serif; font-size: 1.5rem; color: var(--gold); margin-top: 10px; letter-spacing: 0.02em; }
+  .hero .combo { font-size: 0.92rem; color: var(--muted); margin-top: 6px; }
+  .hero .combo a { color: var(--gold); text-decoration: underline; }
   .hero .what { color: rgba(242,231,206,0.86); font-size: 0.95rem; margin: 12px auto 0; max-width: 460px; }
   .hero .where { color: rgba(242,231,206,0.62); font-size: 0.8rem; letter-spacing: 0.08em; margin-top: 12px; }
   .hero .cta-wrap { margin-top: 22px; }
@@ -130,6 +132,7 @@
     <p class="eyebrow">Adelaide</p>
     <h1>Korean <em>Lash Lift</em> &amp; Tint</h1>
     <p class="price">$95 &middot; 75 minutes</p>
+    <p class="combo">Add brow lamination for $85 more (lash + brow combo $180) &mdash; <a id="cta-combo" href="book.html?t=lash-brow-combo">book the combo</a></p>
     <p class="what">A lift and curl of your own natural lashes from the root, tinted, lasting 6&ndash;8 weeks &mdash; no extensions, no mascara needed.</p>
     <p class="where">Mondays &amp; Tuesdays, 10am&ndash;8pm &middot; Pulteney St, Adelaide</p>
     <div class="cta-wrap"><a class="btn" id="cta-top" href="book.html?t=lash-lift">Book my lash lift</a></div>
@@ -215,6 +218,10 @@
   var href = bookUrl(null);
   topCta.href = href;
   bottomCta.href = href;
+
+  // The combo keeps the same ad parameters, but opens on the combo treatment.
+  var comboCta = document.getElementById('cta-combo');
+  if (comboCta) comboCta.href = bookUrl({ t: 'lash-brow-combo' });
 
   // ---- Meta pixel: same guarded shape book.html uses ----------------------
   // window.reviveTrack is always defined by assets/tracking.js and is a no-op
