@@ -405,6 +405,7 @@ const CANCELLATION_POLICY =
 const PREP_FORMS = {
   'lash-lift':       { prep: 'lash-prep.html',          form: 'lash-consent.html' },
   'lash-lift-intro': { prep: 'lash-prep.html',          form: 'lash-consent.html' },
+  'lash-brow-wax':   { prep: 'lash-prep.html',          form: 'lash-consent.html' },
   'microneedling':   { prep: 'microneedling-prep.html', form: 'pdrn-consent.html' },
   'lymphatic':       { prep: 'lymphatic-prep.html',     form: 'body-consent.html' },
   'lymphatic-intro': { prep: 'lymphatic-prep.html',     form: 'body-consent.html' },
@@ -1311,6 +1312,34 @@ async function handleAdmin(req, env, url, path, cors) {
        VALUES (?, 1, ?, datetime('now'))`
     ).bind(phone, note).run();
     return json({ ok: true, flagged: true, phone }, 200, cors);
+  }
+
+  // POST /api/admin/create-treatment {id, name, duration_min, price_aud, description?, sort?}
+  if (path === '/api/admin/create-treatment' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    if (!b.id || !b.name || b.duration_min == null || b.price_aud == null)
+      return json({ error: 'id, name, duration_min and price_aud are required' }, 400, cors);
+    await db.prepare(
+      `INSERT OR IGNORE INTO treatments (id, name, duration_min, price_aud, description, active, sort)
+       VALUES (?, ?, ?, ?, ?, 1, ?)`
+    ).bind(String(b.id), String(b.name), Number(b.duration_min), Number(b.price_aud),
+           String(b.description || ''), Number(b.sort ?? 99)).run();
+    const row = await db.prepare('SELECT * FROM treatments WHERE id = ?').bind(String(b.id)).first();
+    return json({ ok: true, treatment: row }, 200, cors);
+  }
+
+  // POST /api/admin/create-addon {id, name, duration_min?, price_aud, treatment_ids?}
+  if (path === '/api/admin/create-addon' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    if (!b.id || !b.name || b.price_aud == null)
+      return json({ error: 'id, name and price_aud are required' }, 400, cors);
+    await db.prepare(
+      `INSERT OR IGNORE INTO addons (id, name, duration_min, price_aud, active, treatment_ids)
+       VALUES (?, ?, ?, ?, 1, ?)`
+    ).bind(String(b.id), String(b.name), Number(b.duration_min ?? 0), Number(b.price_aud),
+           String(b.treatment_ids || '')).run();
+    const row = await db.prepare('SELECT * FROM addons WHERE id = ?').bind(String(b.id)).first();
+    return json({ ok: true, addon: row }, 200, cors);
   }
 
   return json({ error: 'not_found' }, 404, cors);
