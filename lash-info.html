@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Korean Lash Lift & Tint | Revive Aesthetics — Adelaide</title>
+<meta name="description" content="Everything you need to know about the Korean Lash Lift & Tint at Revive Aesthetics, Adelaide." />
+<meta name="theme-color" content="#2B0F1A" />
+<meta name="robots" content="noindex, nofollow" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+
+<style>
+  :root {
+    --plum: #2B0F1A; --plum-soft: #3c1726; --cream: #F2E7CE; --cream-bg: #f7f0df;
+    --cream-card: #fbf6ea; --gold: #c2a878; --rose: #b58a90; --ink: #2b0f1a; --muted: #6f5b58;
+    --maxw: 680px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Jost', system-ui, sans-serif; color: var(--ink);
+    background: var(--cream-bg); line-height: 1.7; font-weight: 300;
+    -webkit-font-smoothing: antialiased; min-height: 100vh; display: flex; flex-direction: column;
+  }
+  h1, h2, h3 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; line-height: 1.15; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; width: 100%; }
+  .eyebrow { font-size: 0.72rem; letter-spacing: 0.32em; text-transform: uppercase; font-weight: 400; }
+
+  header.nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(43,15,26,0.96); backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(242,231,206,0.14);
+  }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .monogram { font-family: 'Cormorant Garamond', serif; font-weight: 600; font-size: 1.5rem; color: var(--cream); letter-spacing: 0.04em; }
+  .nav-right { color: rgba(242,231,206,0.7); font-size: 0.72rem; letter-spacing: 0.16em; text-transform: uppercase; }
+
+  .hero {
+    background: var(--plum); color: var(--cream); text-align: center; padding: 60px 24px 52px;
+  }
+  .hero .eyebrow { color: var(--gold); margin-bottom: 14px; }
+  .hero h1 { font-size: clamp(2rem, 7vw, 3.2rem); }
+  .hero h1 em { color: var(--gold); font-style: italic; }
+  .hero p { color: rgba(242,231,206,0.75); margin-top: 14px; font-size: 0.94rem; max-width: 460px; margin-left: auto; margin-right: auto; }
+
+  main { flex: 1; padding: 44px 0 80px; }
+
+  .intro-block {
+    background: var(--plum); color: var(--cream);
+    padding: 22px 26px; margin-bottom: 36px;
+    font-size: 0.93rem; line-height: 1.75; font-style: italic;
+    font-family: 'Cormorant Garamond', serif; font-size: 1.05rem;
+  }
+
+  .section { margin-bottom: 32px; }
+
+  .block {
+    background: var(--cream-card); border: 1px solid rgba(43,15,26,0.09);
+    border-top: 3px solid var(--gold); padding: 26px 26px 22px; margin-bottom: 24px;
+  }
+  .block-label {
+    font-size: 0.66rem; letter-spacing: 0.3em; text-transform: uppercase;
+    color: var(--gold); font-weight: 400; margin-bottom: 8px;
+  }
+  .block h2 { font-size: 1.45rem; margin-bottom: 14px; }
+  .block p { font-size: 0.92rem; color: var(--muted); line-height: 1.75; margin-bottom: 10px; }
+  .block p:last-child { margin-bottom: 0; }
+
+  .steps { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-top: 4px; }
+  .steps li { display: flex; align-items: flex-start; gap: 16px; font-size: 0.9rem; }
+  .step-num {
+    flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--plum); color: var(--gold);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; font-weight: 500; font-family: 'Jost', sans-serif;
+    margin-top: 2px;
+  }
+
+  .pill-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+  .pill {
+    background: rgba(43,15,26,0.07); border: 1px solid rgba(43,15,26,0.12);
+    padding: 6px 14px; font-size: 0.8rem; color: var(--ink); font-weight: 400;
+  }
+  .pill strong { font-weight: 500; color: var(--plum); }
+
+  .pricing-card {
+    background: var(--plum); color: var(--cream);
+    padding: 28px 26px; margin-bottom: 24px;
+  }
+  .pricing-card .block-label { color: var(--gold); margin-bottom: 14px; }
+  .pricing-card h2 { font-size: 1.45rem; color: var(--cream); margin-bottom: 20px; }
+  .price-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 11px 0; border-bottom: 1px solid rgba(242,231,206,0.1);
+    font-size: 0.9rem;
+  }
+  .price-row:last-child { border-bottom: none; }
+  .price-row .name { color: rgba(242,231,206,0.85); }
+  .price-row .amount { color: var(--gold); font-family: 'Cormorant Garamond', serif; font-size: 1.15rem; }
+
+  .faq-block { margin-bottom: 16px; }
+  .faq-q { font-weight: 500; font-size: 0.92rem; color: var(--plum); margin-bottom: 4px; }
+  .faq-a { font-size: 0.88rem; color: var(--muted); line-height: 1.7; }
+
+  .note {
+    background: rgba(43,15,26,0.05); border-left: 3px solid var(--rose);
+    padding: 14px 18px; font-size: 0.85rem; color: var(--muted); margin-top: 14px;
+  }
+
+  .cta {
+    background: var(--plum); color: var(--cream);
+    padding: 32px 28px; text-align: center; margin-top: 36px;
+  }
+  .cta h2 { font-size: 1.7rem; color: var(--cream); margin-bottom: 10px; }
+  .cta p { font-size: 0.88rem; color: rgba(242,231,206,0.75); margin-bottom: 20px; }
+  .cta-links { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+  .cta a {
+    display: inline-block; background: var(--gold); color: var(--plum);
+    padding: 12px 26px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-size: 0.73rem; text-decoration: none; font-family: 'Jost', sans-serif;
+    transition: opacity .2s;
+  }
+  .cta a:hover { opacity: 0.85; }
+  .cta a.outline {
+    background: transparent; border: 1px solid rgba(242,231,206,0.35); color: rgba(242,231,206,0.8);
+  }
+
+  footer {
+    background: var(--plum); color: rgba(242,231,206,0.5);
+    text-align: center; padding: 28px 24px;
+    font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase;
+    border-top: 1px solid rgba(242,231,206,0.1);
+  }
+  footer strong { color: var(--gold); font-weight: 400; }
+
+  @media print {
+    header.nav { position: static; }
+    .cta a { border: 1px solid var(--plum); }
+    body { background: #fff; }
+    .block { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <span class="monogram">RA</span>
+    <span class="nav-right">Revive Aesthetics</span>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="eyebrow">Treatment Information</div>
+  <h1>Korean Lash Lift <em>&amp; Tint</em></h1>
+  <p>Lifted, curled, defined natural lashes — no extensions, no mascara needed.</p>
+</div>
+
+<main>
+  <div class="wrap">
+
+    <div class="intro-block">
+      The Korean Lash Lift is one of my favourite treatments — it completely transforms how your eyes look by lifting and curling your natural lashes from the very root. The tint finishes them beautifully. You'll wake up every morning with lashes that look done, with absolutely nothing on them. <strong style="color:var(--gold); font-style:normal;">Stefani x</strong>
+    </div>
+
+    <!-- What it is -->
+    <div class="block">
+      <div class="block-label">The treatment</div>
+      <h2>What is a Korean Lash Lift?</h2>
+      <p>A Korean Lash Lift is a semi-permanent treatment that lifts and curls your own natural lashes from the root — not the mid-shaft like a traditional perm. The result is a wide-eyed, fanned effect that makes your lashes look significantly longer and fuller.</p>
+      <p>The tint is applied immediately after to deepen the colour, making every individual lash visible and defined without any mascara.</p>
+      <p>It's gentle on natural lashes when done correctly, with no damage and no extensions involved.</p>
+    </div>
+
+    <!-- The process -->
+    <div class="block">
+      <div class="block-label">Step by step</div>
+      <h2>What happens during your appointment</h2>
+      <ol class="steps">
+        <li><span class="step-num">1</span><span>Your lashes are cleansed and a small silicone shield is placed on your eyelid, matched to your lash length and the curl you want.</span></li>
+        <li><span class="step-num">2</span><span>Your lashes are lifted onto the shield, then a gentle lifting solution is applied and left to process.</span></li>
+        <li><span class="step-num">3</span><span>A setting solution locks your lashes in their new lifted shape.</span></li>
+        <li><span class="step-num">4</span><span>A tint is applied to deepen and define the colour of every lash.</span></li>
+        <li><span class="step-num">5</span><span>A nourishing treatment is applied to condition and hydrate your lashes after processing.</span></li>
+      </ol>
+      <div class="note">The whole appointment takes around 75 minutes. You'll be lying comfortably with your eyes closed for most of it.</div>
+    </div>
+
+    <!-- Results & longevity -->
+    <div class="block">
+      <div class="block-label">Results</div>
+      <h2>What to expect &amp; how long it lasts</h2>
+      <p>Results are immediate — you'll see the difference as soon as you open your eyes. The lift lasts <strong>6–8 weeks</strong>, gradually relaxing as your natural lashes grow out.</p>
+      <div class="pill-row">
+        <div class="pill"><strong>Duration</strong> 6–8 weeks</div>
+        <div class="pill"><strong>Appointment</strong> 75 min</div>
+        <div class="pill"><strong>Downtime</strong> None</div>
+        <div class="pill"><strong>Mascara</strong> Not needed</div>
+      </div>
+      <div class="note">After 3 weeks, a tint touch-up can refresh the colour as your lashes grow. A full new lift is recommended no sooner than 6 weeks after your previous appointment.</div>
+    </div>
+
+    <!-- Suitability -->
+    <div class="block">
+      <div class="block-label">Is it for me?</div>
+      <h2>Who is it suited to</h2>
+      <p>The Korean Lash Lift works beautifully on most natural lash types — short, long, straight, or downward-pointing lashes all respond well. The shield size is chosen specifically for your lash length to give the most flattering result for your eye shape.</p>
+      <p>It is not suitable if you currently have lash extensions (they need to be removed first) or if you have had a lash lift within the last 6 weeks.</p>
+      <p>Please let Stefani know if you have any eye conditions, sensitivities, or are pregnant, so your suitability can be confirmed before your booking.</p>
+    </div>
+
+    <!-- Pricing -->
+    <div class="pricing-card">
+      <div class="block-label">Pricing</div>
+      <h2>Treatments &amp; add-ons</h2>
+      <div class="price-row">
+        <span class="name">Korean Lash Lift &amp; Tint</span>
+        <span class="amount">$95</span>
+      </div>
+      <div class="price-row">
+        <span class="name">Lash Tint Touch-Up (3 weeks)</span>
+        <span class="amount">$25</span>
+      </div>
+      <div class="price-row">
+        <span class="name">Keratin Lash Infusion (add-on)</span>
+        <span class="amount">$18</span>
+      </div>
+      <div class="price-row">
+        <span class="name">Korean Lash Lift + Brow Lamination Combo</span>
+        <span class="amount">$180</span>
+      </div>
+    </div>
+
+    <!-- FAQ -->
+    <div class="block">
+      <div class="block-label">Questions</div>
+      <h2>Frequently asked</h2>
+
+      <div class="faq-block">
+        <div class="faq-q">Does it damage my natural lashes?</div>
+        <div class="faq-a">When performed correctly with the right solutions, a lash lift does not damage natural lashes. It's important not to lift more frequently than every 6 weeks to allow the lash cycle to complete.</div>
+      </div>
+      <div class="faq-block">
+        <div class="faq-q">Can I still wear mascara?</div>
+        <div class="faq-a">Yes — most clients find they don't need it, but you can wear non-waterproof mascara 48 hours after your appointment. Avoid waterproof formulas as they require an oil-based remover that shortens the lift's longevity.</div>
+      </div>
+      <div class="faq-block">
+        <div class="faq-q">What do I need to avoid beforehand?</div>
+        <div class="faq-a">In the 48 hours before your appointment, avoid waterproof mascara, oil-based eye products, eyelash curlers, and heavy gym sessions or saunas. Come to your appointment with clean, dry lashes and no eye makeup.</div>
+      </div>
+      <div class="faq-block">
+        <div class="faq-q">What about the 48 hours after?</div>
+        <div class="faq-a">Keep your lashes dry and avoid steam, swimming, heavy sweating, mascara, and oil-based products around the eye area for the first 48 hours. This is what sets the lift for maximum longevity.</div>
+      </div>
+      <div class="faq-block">
+        <div class="faq-q">What is the Keratin Lash Infusion add-on?</div>
+        <div class="faq-a">An optional nourishing treatment added at the end of your lift that deeply conditions the lash structure with keratin. It helps maintain strength, shine, and longevity — particularly great if your lashes are fine or have been through extensions before.</div>
+      </div>
+    </div>
+
+    <div class="cta">
+      <h2>Ready to book?</h2>
+      <p>Book online in a few clicks, or reach out with any questions.</p>
+      <div class="cta-links">
+        <a href="https://reviveaestheticsadl.com.au/book.html">Book online</a>
+        <a class="outline" href="tel:0404967051">0404 967 051</a>
+        <a class="outline" href="mailto:reviveaestheticsadl@gmail.com">Email Stefani</a>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <strong>Revive Aesthetics</strong> &nbsp;·&nbsp; Adelaide Skin Studio &nbsp;·&nbsp; @reviveaesthetics.adl
+</footer>
+
+</body>
+</html>
