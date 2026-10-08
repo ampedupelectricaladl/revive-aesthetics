@@ -405,7 +405,8 @@ const CANCELLATION_POLICY =
 const PREP_FORMS = {
   'lash-lift':       { prep: 'lash-prep.html',          form: 'lash-consent.html' },
   'lash-lift-intro': { prep: 'lash-prep.html',          form: 'lash-consent.html' },
-  'lash-brow-wax':   { prep: 'lash-prep.html',          form: 'lash-consent.html' },
+  'lash-brow-combo':  { prep: 'lash-prep.html',          form: 'lash-consent.html' },
+  'lash-brow-shape':  { prep: 'lash-prep.html',          form: 'lash-consent.html' },
   'microneedling':   { prep: 'microneedling-prep.html', form: 'pdrn-consent.html' },
   'lymphatic':       { prep: 'lymphatic-prep.html',     form: 'body-consent.html' },
   'lymphatic-intro': { prep: 'lymphatic-prep.html',     form: 'body-consent.html' },

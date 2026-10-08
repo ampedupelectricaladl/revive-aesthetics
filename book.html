@@ -396,6 +396,8 @@
       description: 'Korean lash lift and tint treatment.' },
     { id: 'lash-brow-combo', name: 'Korean Lash Lift + Brow Lamination', duration_min: 135, price_aud: 180,
       description: 'The Korean lash lift and tint together with brow lamination, tint and shape, in one appointment.' },
+    { id: 'lash-brow-shape', name: 'Korean Lash Lift + Brow Shape & Tint', duration_min: 105, price_aud: 145,
+      description: 'The Korean lash lift and tint together with a brow shape and tint, in the one appointment.' },
     { id: 'brow-lamination', name: 'Brow Lamination, Tint & Shape', duration_min: 60, price_aud: 100,
       description: 'Your brow hairs brushed up and set into a fuller shape, then tinted and shaped to finish.' },
     { id: 'brow-shape-tint', name: 'Brow Shape & Tint', duration_min: 30, price_aud: 50,
@@ -410,7 +412,7 @@
 
   // Lash lift is the ad spend, so it leads; the free consultation is the easiest
   // yes, so it sits second. Anything else keeps the order the server sent.
-  var TREATMENT_ORDER = ['lash-lift', 'lash-brow-combo', 'brow-lamination', 'brow-shape-tint', 'consultation'];
+  var TREATMENT_ORDER = ['lash-lift', 'lash-brow-combo', 'lash-brow-shape', 'brow-lamination', 'brow-shape-tint', 'consultation'];
   function orderTreatments(list) {
     var rank = function (t) {
       var i = TREATMENT_ORDER.indexOf(t.id);
