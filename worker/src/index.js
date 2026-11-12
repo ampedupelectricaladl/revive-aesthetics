@@ -879,36 +879,55 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     if (body.website) return json({ ok: true }, 200, cors); // honeypot: pretend success
 
     const s = (v, n) => String(v || '').trim().slice(0, n);
-    const p = {
-      had_before: s(body.had_before, 60),
-      interest: s(body.interest, 60),
-      style: s(body.style, 60),
-      price: s(body.price, 60),
-      frequency: s(body.frequency, 60),
-      matters: (Array.isArray(body.matters) ? body.matters : [])
-        .map(x => String(x).trim().slice(0, 60)).filter(Boolean).slice(0, 8),
-      comments: s(body.comments, 600),
-      notify: body.notify ? 'yes' : 'no',
-    };
-    if (!p.interest) return json({ error: 'interest_required' }, 400, cors);
-
     const survey = s(body.survey, 40) || 'lash-lift';
     const name = s(body.name, 120);
     const contact = s(body.contact, 160);
+
+    let p, lines;
+
+    if (survey === 'open-day') {
+      p = {
+        day_pref: s(body.day_pref, 60),
+        time_pref: s(body.time_pref, 60),
+        comments: s(body.comments, 600),
+        notify: body.notify ? 'yes' : 'no',
+      };
+      if (!p.day_pref) return json({ error: 'day_pref_required' }, 400, cors);
+      lines = [
+        `\u{1F4C5} <b>New day survey</b>`,
+        `Preferred day: <b>${p.day_pref}</b>` + (p.time_pref ? ` · Time: <b>${p.time_pref}</b>` : ''),
+      ];
+      if (p.comments) lines.push(`”${p.comments}”`);
+      if (name || contact) lines.push(`${name || 'No name'}${contact ? ' · ' + contact : ''}${p.notify === 'yes' ? ' · notify me when it opens' : ''}`);
+    } else {
+      p = {
+        had_before: s(body.had_before, 60),
+        interest: s(body.interest, 60),
+        style: s(body.style, 60),
+        price: s(body.price, 60),
+        frequency: s(body.frequency, 60),
+        matters: (Array.isArray(body.matters) ? body.matters : [])
+          .map(x => String(x).trim().slice(0, 60)).filter(Boolean).slice(0, 8),
+        comments: s(body.comments, 600),
+        notify: body.notify ? 'yes' : 'no',
+      };
+      if (!p.interest) return json({ error: 'interest_required' }, 400, cors);
+      lines = [
+        `\u{1F4AC} <b>Lash lift survey response</b>`,
+        `Would book: <b>${p.interest || '—'}</b> · Fair price: <b>${p.price || '—'}</b>`,
+        `Had one before: ${p.had_before || '—'} · Style: ${p.style || '—'} · Upkeep: ${p.frequency || '—'}`,
+      ];
+      if (p.matters.length) lines.push(`Matters most: ${p.matters.join(', ')}`);
+      if (p.comments) lines.push(`”${p.comments}”`);
+      if (name || contact) lines.push(`${name || 'No name'}${contact ? ' · ' + contact : ''}${p.notify === 'yes' ? ' · wants launch news' : ''}`);
+    }
+
     const id = crypto.randomUUID().slice(0, 10);
     await db.prepare(
       `INSERT INTO survey_responses (id, survey, name, contact, payload, created_at)
        VALUES (?, ?, ?, ?, ?, ?)`
     ).bind(id, survey, name, contact, JSON.stringify(p), new Date().toISOString()).run();
 
-    const lines = [
-      `\u{1F4AC} <b>Lash lift survey response</b>`,
-      `Would book: <b>${p.interest || '—'}</b> · Fair price: <b>${p.price || '—'}</b>`,
-      `Had one before: ${p.had_before || '—'} · Style: ${p.style || '—'} · Upkeep: ${p.frequency || '—'}`,
-    ];
-    if (p.matters.length) lines.push(`Matters most: ${p.matters.join(', ')}`);
-    if (p.comments) lines.push(`“${p.comments}”`);
-    if (name || contact) lines.push(`${name || 'No name'}${contact ? ' · ' + contact : ''}${p.notify === 'yes' ? ' · wants launch news' : ''}`);
     ctx.waitUntil(telegram(env, lines.join('\n')));
 
     return json({ ok: true, id }, 200, cors);
