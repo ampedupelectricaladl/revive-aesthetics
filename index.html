@@ -92,8 +92,7 @@
     { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Brow Lamination, Tint & Shape" } },
     { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Brow Shape & Tint" } },
     { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "PDRN Microneedling Booster" } },
-    { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "LED Light Therapy" } },
-    { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Lymphatic Stomach Drainage Massage" } }
+    { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "LED Light Therapy" } }
   ]
 }
 </script>
@@ -107,7 +106,7 @@
     {
       "@type": "Question",
       "name": "What treatments does Revive Aesthetics offer in Adelaide?",
-      "acceptedAnswer": { "@type": "Answer", "text": "Revive Aesthetics is an Adelaide lash and brow studio. The menu is Korean lash lifts and tints, brow lamination, and brow shaping and tinting, on their own or combined in one visit. Skin treatments are also available: PDRN microneedling, LED light therapy and lymphatic stomach drainage massage." }
+      "acceptedAnswer": { "@type": "Answer", "text": "Revive Aesthetics is an Adelaide lash and brow studio. The menu is Korean lash lifts and tints, brow lamination, and brow shaping and tinting, on their own or combined in one visit. Skin treatments are also available: PDRN microneedling and LED light therapy." }
     },
     {
       "@type": "Question",
@@ -356,8 +355,12 @@
     font-size: 1.15rem; color: var(--rose);
   }
   .skin { background: var(--cream-bg); }
-  .skin-result { max-width: 400px; margin: 56px auto 0; text-align: center; }
-  .skin-result figure { margin: 0 0 14px; border: 1px solid rgba(43,15,26,0.08); box-shadow: 0 14px 34px rgba(43,15,26,0.08); }
+  .skin-result { max-width: 620px; margin: 56px auto 0; text-align: center; }
+  .skin-result .ba-labels {
+    display: grid; grid-template-columns: 1fr 1fr; margin: 0 0 6px;
+    font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.2rem; color: var(--rose);
+  }
+  .skin-result figure { margin: 0 0 10px; border: 1px solid rgba(43,15,26,0.08); box-shadow: 0 14px 34px rgba(43,15,26,0.08); }
   .skin-result img { width: 100%; height: auto; }
   .skin-result figcaption, .skin-result p { color: var(--muted); font-size: 0.86rem; }
   .skin-cta { text-align: center; margin-top: 44px; }
@@ -938,18 +941,13 @@
         <span class="tag">Add-On · Calm · Glow</span>
         <span class="price">$20 · 15 min</span>
       </div>
-      <div class="svc-card">
-        <h3>Lymphatic Stomach Drainage Massage</h3>
-        <p>A targeted abdominal massage that stimulates the lymphatic system to reduce bloating and ease puffiness — leaving you feeling lighter and more balanced.</p>
-        <span class="tag">De-Bloat · Restore</span>
-        <span class="price">$99 · 45 min</span>
-      </div>
     </div>
     <div class="skin-result reveal">
       <figure>
-        <img src="assets/microneedling-result-1.jpg" width="1024" height="1280" loading="lazy" alt="Microneedling before and after result — Revive Aesthetics Adelaide" />
+        <img src="assets/ig/microneedling-before-after.jpg" width="1200" height="722" loading="lazy" alt="Microneedling before and after result — Revive Aesthetics Adelaide" />
       </figure>
-      <p>Microneedling, before &amp; after — a real client treated in the studio.</p>
+      <div class="ba-labels"><span>Before</span><span>After</span></div>
+      <p>Microneedling — a real client treated in the studio.</p>
     </div>
     <div class="skin-cta reveal">
       <a href="book.html" class="btn btn--dark-ghost">Book a Free Skin Consultation</a>
@@ -1016,7 +1014,7 @@
     <div class="faq-list">
       <details class="faq-item">
         <summary>What treatments does Revive Aesthetics offer in Adelaide?</summary>
-        <div class="faq-a"><p>Revive Aesthetics is an Adelaide lash and brow studio. The menu is Korean lash lifts and tints, brow lamination, and brow shaping and tinting — on their own or combined in one visit. Skin treatments are also available: PDRN microneedling, LED light therapy and lymphatic stomach drainage massage.</p></div>
+        <div class="faq-a"><p>Revive Aesthetics is an Adelaide lash and brow studio. The menu is Korean lash lifts and tints, brow lamination, and brow shaping and tinting — on their own or combined in one visit. Skin treatments are also available: PDRN microneedling and LED light therapy.</p></div>
       </details>
       <details class="faq-item">
         <summary>What is a Korean lash lift?</summary>
@@ -1132,7 +1130,6 @@
           <option>Brow Shape &amp; Tint</option>
           <option>PDRN Microneedling Booster</option>
           <option>LED Light Therapy add-on</option>
-          <option>Lymphatic Stomach Drainage Massage</option>
           <option>Skin Consultation (Free)</option>
           <option>Not sure — help me decide</option>
         </select>
