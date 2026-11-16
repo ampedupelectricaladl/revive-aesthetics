@@ -23,7 +23,7 @@ content, and help run her business, the same way Marcus's assistant helps him.
 
 ## The business
 - **Owner:** Stefani
-- **What:** Lash and brow studio first (Marcus, 16 Nov 2026: "she mainly does lashes now. Lashes and brows.") — **Korean lash lifts · brow lamination · brow shape & tint · lash + brow combos**. Skin treatments are still offered but come second: microneedling · LED light therapy · lymphatic massage · skin consultations. Never describe Revive as a "boutique skin studio".
+- **What:** Lash and brow studio first (Marcus, 16 Nov 2026: "she mainly does lashes now. Lashes and brows.") — **Korean lash lifts · brow lamination · brow shape & tint · lash + brow combos**. Skin treatments are still offered but come second: microneedling · LED light therapy · skin consultations. **Lymphatic massage is NO LONGER offered (Stefani, 16 Nov 2026) — off the site and inactive in the booking database; never offer or book it.** Never describe Revive as a "boutique skin studio".
 - **Hours:** Mon & Tue, 10am–8pm (Australia/Adelaide)
 - **Phone:** 0404 967 051 · **Email:** reviveaestheticsadl@gmail.com
 - **Instagram:** @reviveaesthetics.adl
