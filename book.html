@@ -151,7 +151,7 @@
   .week-strip::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 3px; }
   .week-chip { flex: 0 0 auto; scroll-snap-align: start; min-width: 96px; text-align: center; padding: 10px 14px; }
   .week-chip .dow { font-size: 0.6rem; }
-  .ask-other { text-align: center; color: var(--muted); font-size: 0.88rem; margin-top: 34px; }
+  .ask-other { text-align: center; color: var(--ink); font-size: 0.95rem; margin-top: 28px; }
   .ask-other a { color: var(--plum); }
 
   /* details form */
@@ -271,15 +271,16 @@
            list and nothing else. Never add "booked" / "only X left" labels here. -->
       <div class="next-days" id="next-days"></div>
       <div class="msg err" id="time-msg"></div>
+      <!-- Sits straight under the times (Marcus, 18 Nov 2026: "a bit higher up"). -->
+      <p class="ask-other" id="ask-other" style="display:none;">None of these suit?
+        <a href="https://www.instagram.com/reviveaesthetics.adl" target="_blank" rel="noopener">Message Stefani on Instagram</a>
+        or call <a href="tel:0404967051">0404 967 051</a> for more availability.</p>
       <!-- Look further ahead, one week at a time. Each week gets the same short
            list from the worker - a few times a day, never the whole day. -->
       <div class="week-pick" id="week-pick" style="display:none;">
         <p class="week-lbl">Looking further ahead? Slide to pick a week</p>
         <div class="week-strip" id="week-strip"></div>
       </div>
-      <p class="ask-other" id="ask-other" style="display:none;">None of these suit?
-        <a href="https://www.instagram.com/reviveaesthetics.adl" target="_blank" rel="noopener">Message Stefani on Instagram</a>
-        or call <a href="tel:0404967051">0404 967 051</a> and she will find you a time.</p>
       <div class="nav-row"><button class="btn-link" data-back="1">&larr; Change treatment</button><span></span></div>
     </div>
 
