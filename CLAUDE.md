@@ -41,14 +41,16 @@ content, and help run her business, the same way Marcus's assistant helps him.
 - `worker/` — the booking API (Cloudflare Worker + D1), **LIVE** at
   `https://revive-booking.ampedup.workers.dev`
   - `src/index.js` — availability engine (Mon/Tue 10am–8pm, 30-min grid, 15-min buffer,
-    48h online notice, 14-day online horizon), book/cancel, Telegram alerts, `/api/admin/*` endpoints.
+    48h online notice, 13-week online horizon), book/cancel, Telegram alerts, `/api/admin/*` endpoints.
   - `schema.sql` — tables + seed treatments/add-ons.
   - `deploy.sh` — one-shot deploy (D1 → schema → deploy → secrets → wires API URL → pushes site).
 
 ## What clients see vs what Stefani sees (Marcus, 18 Nov 2026)
 - **The booking page shows only the next few openings — never the whole diary.** Before this,
   anyone could click through every open day and see how quiet the diary was. The public
-  `/api/availability` now returns at most 3 days and 6 times, 48 hours' notice, 14 days ahead.
+  `/api/availability` now returns at most 3 days and 6 times, with 48 hours' notice. A week
+  slider under the times lets a client look up to 13 weeks ahead, one week at a time
+  (`?week=YYYY-MM-DD`) — each week gets the same short list, never the whole day.
   A day with a booking offers the times next to it (so days fill back-to-back); a day with none
   offers one daytime and one after-work time. The settings are the `SHOW_*`, `MIN_NOTICE_MIN`
   and `HORIZON_DAYS` constants at the top of `worker/src/index.js`.
@@ -60,7 +62,7 @@ content, and help run her business, the same way Marcus's assistant helps him.
   ```
 - **A client wants a time the page does not show?** That is normal. If it is free in the admin
   view, book her in yourself (`/api/admin/book`) or pin that time (`node scripts/open-day.js`).
-  A pinned date is shown exactly as pinned and ignores the notice and 14-day limits.
+  A pinned date is shown exactly as pinned and ignores the 48-hour notice.
 - **Never add "booked", "filling fast", "only X left" or any other claim about demand** to the
   site. Limiting what is shown is fine; saying something untrue is not. `node
   scripts/test-limited-availability.js` guards all of this — run it after touching availability.

@@ -4,7 +4,7 @@
  *
  * Public:
  *   GET  /api/treatments
- *   GET  /api/availability?treatment=<id>&from=YYYY-MM-DD&days=N   (SHORT list of next openings only - never the full diary)
+ *   GET  /api/availability?treatment=<id>[&week=YYYY-MM-DD]   (SHORT list only - the next openings, or one week's - never the full diary)
  *   POST /api/create-payment-intent  {name?}  → {client_secret}
  *   POST /api/book    {treatment,date,time,name,phone,email,notes,payment_intent_id}
  *   GET  /api/booking?id=&token=
@@ -38,7 +38,7 @@ const CLOSE_MIN = 20 * 60;       // 8:00pm
 const GRID_MIN = 30;             // slot start times every 30 min
 const BUFFER_MIN = 15;           // turnover between clients (setup/cleanup)
 const MIN_NOTICE_MIN = 48 * 60;  // online bookings need 48h notice (matches the free-cancellation window)
-const HORIZON_DAYS = 14;         // how far ahead clients can book online
+const HORIZON_DAYS = 91;         // how far ahead clients can book online (13 weeks; Marcus 18 Nov 2026: "months from now")
 
 // ---------- what a visitor is SHOWN (Marcus, 18 Nov 2026) ----------
 // The public page used to list every free time on every open day for two months
@@ -55,10 +55,11 @@ const DAY_ANCHOR_FIRST = 10 * 60;      // daytime anchor is picked from 10:00am 
 const DAY_ANCHOR_CHOICES = 10;         // ... in 30-min steps up to 2:30pm
 const EVENING_ANCHOR_FIRST = 17 * 60;  // after-work anchor is picked from 5:00pm ...
 const EVENING_ANCHOR_CHOICES = 3;      // ... 5:30pm or 6:00pm
+// A client can also look further ahead, ONE WEEK AT A TIME (?week=YYYY-MM-DD).
+// A week gets the same short treatment - a few times per day, never the grid - so
+// paging through three months still never lays the diary out.
 // A time Stefani pins herself (slot_overrides) is her explicit word on what the
-// public sees for that date, so pinned dates are shown exactly as pinned and may
-// sit further out than the normal horizon.
-const PINNED_HORIZON_DAYS = 60;
+// public sees for that date, so pinned dates are shown exactly as pinned.
 // A client who was shown a time may take a while to fill in her details and pay.
 // /api/book therefore accepts a time up to this long after it crossed the notice
 // line, so nobody pays a deposit and is then told the time is too soon.
@@ -112,6 +113,24 @@ function parseHHMM(t) {
 }
 
 const isDateStr = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+
+// The Monday of the week a date falls in.
+function mondayOf(dateStr) {
+  return addDays(dateStr, -((dayOfWeek(dateStr) + 6) % 7));
+}
+
+// The weeks a client may page through: from the week holding the first open day
+// that is past the notice period, to the last week inside the horizon. Dates only -
+// it says nothing about how full any week is.
+function browsableWeeks(now, lastAllowed) {
+  const soonest = now.abs + MIN_NOTICE_MIN;
+  let d = now.date;
+  while (absMin(d, CLOSE_MIN) <= soonest) d = addDays(d, 1);
+  for (let i = 0; i < 7 && !OPEN_DAYS.includes(dayOfWeek(d)); i++) d = addDays(d, 1);
+  const weeks = [];
+  for (let w = mondayOf(d); w <= lastAllowed; w = addDays(w, 7)) weeks.push(w);
+  return weeks;
+}
 
 // ---------- availability ----------
 
@@ -609,9 +628,14 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     const now = nowInAdelaide();
     let from = url.searchParams.get('from');
     if (!isDateStr(from) || from < now.date) from = now.date;
-    const days = Math.min(parseInt(url.searchParams.get('days') || '60', 10) || 60, PINNED_HORIZON_DAYS);
-    const lastAllowed = addDays(now.date, HORIZON_DAYS);              // normal open days
-    const lastPinned = addDays(now.date, PINNED_HORIZON_DAYS);        // dates Stefani pinned herself
+    let days = Math.min(parseInt(url.searchParams.get('days') || '0', 10) || HORIZON_DAYS + 1, HORIZON_DAYS + 1);
+    const lastAllowed = addDays(now.date, HORIZON_DAYS);
+    // ?week=<any date in it> : just that Monday-to-Sunday week, same short list.
+    const week = url.searchParams.get('week');
+    if (isDateStr(week)) {
+      from = mondayOf(week) < now.date ? now.date : mondayOf(week);
+      days = dayOfWeek(from) === 0 ? 1 : 8 - dayOfWeek(from);   // up to and including Sunday
+    }
     // One query for every pinned date in the window, so the loop can keep its cheap
     // skip without hiding a Saturday that Stefani has deliberately opened.
     const pinnedDates = new Set();
@@ -628,12 +652,12 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     let shownDays = 0, shownSlots = 0;
     for (let i = 0; i < days; i++) {
       const d = addDays(from, i);
-      if (d > lastPinned) break;
+      if (d > lastAllowed) break;
       const isPinned = pinnedDates.has(d);
       // Skip only days that are neither an open weekday nor pinned open via slot_overrides
       // (the Saturday trial, 20 Sept 2026). `pinnedDates` is one query, fetched above the loop.
       if (!OPEN_DAYS.includes(dayOfWeek(d)) && !isPinned) continue;
-      if (!isPinned && (d > lastAllowed || shownDays >= SHOW_MAX_DAYS || shownSlots >= SHOW_MAX_SLOTS)) continue;
+      if (!isPinned && (shownDays >= SHOW_MAX_DAYS || shownSlots >= SHOW_MAX_SLOTS)) continue;
       const picture = await dayPicture(db, d, duration, now.abs);
       let offered = offeredSlots(d, picture, duration);
       if (!picture.pinned) offered = offered.slice(0, SHOW_MAX_SLOTS - shownSlots);
@@ -641,7 +665,7 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       if (!picture.pinned) { shownDays++; shownSlots += offered.length; }
       dates[d] = offered.map(m => ({ min: m, label: fmtTime(m) }));
     }
-    return json({ treatment: t.id, duration_min: duration, dates }, 200, cors);
+    return json({ treatment: t.id, duration_min: duration, dates, weeks: browsableWeeks(now, lastAllowed) }, 200, cors);
   }
 
   if (path === '/api/create-payment-intent' && req.method === 'POST') {
@@ -705,16 +729,12 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     const now = nowInAdelaide();
     // The same rules the public list was built from, checked again here so the
     // limits cannot be walked around by posting a time the page never offered.
-    // A date Stefani pinned keeps its own rules (no notice, longer reach).
+    // A date Stefani pinned keeps its own notice rule (none).
     const picture = await dayPicture(db, b.date, duration, now.abs, MIN_NOTICE_MIN - BOOK_GRACE_MIN);
-    if (!picture.pinned) {
-      if (b.date > addDays(now.date, HORIZON_DAYS)) return json({ error: 'too_far_ahead' }, 409, cors);
-      if (absMin(b.date, startMin) >= now.abs &&
-          absMin(b.date, startMin) < now.abs + MIN_NOTICE_MIN - BOOK_GRACE_MIN) {
-        return json({ error: 'too_soon' }, 409, cors);
-      }
-    } else if (b.date > addDays(now.date, PINNED_HORIZON_DAYS)) {
-      return json({ error: 'too_far_ahead' }, 409, cors);
+    if (b.date > addDays(now.date, HORIZON_DAYS)) return json({ error: 'too_far_ahead' }, 409, cors);
+    if (!picture.pinned && absMin(b.date, startMin) >= now.abs &&
+        absMin(b.date, startMin) < now.abs + MIN_NOTICE_MIN - BOOK_GRACE_MIN) {
+      return json({ error: 'too_soon' }, 409, cors);
     }
     if (!picture.slots.includes(startMin)) return json({ error: 'slot_unavailable' }, 409, cors);
 
@@ -1151,7 +1171,7 @@ async function handleAdmin(req, env, url, path, cors) {
   const db = env.DB;
 
   // The FULL diary of free times - every open day, every free start, no notice,
-  // 60 days out. This is Stefani's view (her Hub and her assistant); the public
+  // 60 days out unless ?days= asks for more. This is Stefani's view (her Hub and her assistant); the public
   // /api/availability deliberately returns only a short list of next openings.
   if (path === '/api/admin/availability' && req.method === 'GET') {
     const t = await db.prepare('SELECT * FROM treatments WHERE id = ?').bind(url.searchParams.get('treatment')).first();
@@ -1162,7 +1182,7 @@ async function handleAdmin(req, env, url, path, cors) {
     const now = nowInAdelaide();
     let from = url.searchParams.get('from');
     if (!isDateStr(from) || from < now.date) from = now.date;
-    const days = Math.min(parseInt(url.searchParams.get('days') || '60', 10) || 60, PINNED_HORIZON_DAYS);
+    const days = Math.min(parseInt(url.searchParams.get('days') || '60', 10) || 60, 120);
     const dates = {};
     for (let i = 0; i < days; i++) {
       const d = addDays(from, i);

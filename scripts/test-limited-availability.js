@@ -6,8 +6,9 @@
  * Decided 18 Nov 2026 (Marcus): the booking page listed every free time on every
  * open day for two months, so anyone could read the whole diary and see how quiet
  * it was. The public endpoint now returns a SHORT list and nothing else:
- *   - 48 hours notice, 14 days ahead
- *   - at most 3 days and 6 times
+ *   - 48 hours notice, 13 weeks (91 days) ahead
+ *   - at most 3 days and 6 times - for the next openings AND for any one week a
+ *     client pages to with the week slider, so three months never lays out the diary
  *   - a day with bookings offers the times next to them (it fills back-to-back)
  *   - a day with none offers one daytime and one after-work time, fixed per date
  *   - Stefani's admin view still returns everything
@@ -59,8 +60,12 @@ const MON1 = '2026-11-23';
 const TUE1 = '2026-11-24';
 const MON2 = '2026-11-30';
 const TUE2 = '2026-12-01';
-const MON3 = '2026-12-07';   // 19 days out - past the 14-day horizon
-const PINNED_SAT = '2026-12-12'; // 24 days out - only visible because it is pinned
+const MON3 = '2026-12-07';   // 19 days out - reachable with the week slider
+const TUE3 = '2026-12-08';
+const THU3 = '2026-12-10';   // a Thursday in that same week
+const PINNED_SAT = '2026-12-12'; // a Saturday - only open because Stefani pinned it
+const LAST_OPEN = '2027-02-16';  // Tue, 90 days out - the last open day inside the 91-day horizon
+const PAST_MON = '2027-02-22';   // Mon, 96 days out - past the horizon
 
 // ---------------------------------------------------------------------------
 // fake D1
@@ -173,12 +178,30 @@ async function runSuite(mod) {
 
   await group('horizon', async () => {
     freezeAdelaide(WED, '12:00');
-    let r = await publicList(mod, {}, 'treatment=lash-lift&from=' + MON3 + '&days=30');
+    let r = await publicList(mod, {}, 'treatment=lash-lift&week=' + PAST_MON);
     ok(Object.keys(r.body.dates).length === 0,
-      'horizon. asking for dates past 14 days returns nothing (got ' + Object.keys(r.body.dates).join(' ') + ')');
-    r = await publicList(mod, { blocked: [MON1, TUE1, MON2] });
+      'horizon. a week past 13 weeks returns nothing (got ' + Object.keys(r.body.dates).join(' ') + ')');
+    r = await publicList(mod, {}, 'treatment=lash-lift&week=' + LAST_OPEN);
+    const last = Object.keys(r.body.dates);
+    ok(last.length > 0 && last.every((d) => d <= LAST_OPEN),
+      'horizon. the last week inside it still shows times (got ' + last.join(' ') + ')');
+    const weeks = r.body.weeks || [];
+    ok(weeks[0] === MON1 && weeks.length === 13 && weeks[weeks.length - 1] <= LAST_OPEN,
+      'horizon. the slider offers 13 weeks from ' + MON1 + ', none past the horizon (got ' + weeks.length + ': ' + weeks[0] + '..' + weeks[weeks.length - 1] + ')');
+  });
+
+  await group('week', async () => {
+    freezeAdelaide(WED, '12:00');
+    let r = await publicList(mod, {}, 'treatment=lash-lift&week=' + MON3);
     const days = Object.keys(r.body.dates);
-    ok(days.join(',') === TUE2, 'horizon. with the first three days closed only ' + TUE2 + ' is left - never ' + MON3 + ' (got ' + days.join(',') + ')');
+    ok(days.join(',') === [MON3, TUE3].join(','), 'week. picking a week shows that week only (got ' + days.join(',') + ')');
+    ok(mins(r.body, MON3).length === 2 && mins(r.body, TUE3).length === 2,
+      'week. and still only 2 times on a quiet day, never the whole day (got ' + mins(r.body, MON3).length + ' and ' + mins(r.body, TUE3).length + ')');
+    const viaThursday = await publicList(mod, {}, 'treatment=lash-lift&week=' + THU3);
+    ok(JSON.stringify(viaThursday.body.dates) === JSON.stringify(r.body.dates),
+      'week. any date inside the week gives the same week (asked with a Thursday)');
+    const a = JSON.stringify((await publicList(mod, {}, 'treatment=lash-lift&week=' + MON3)).body.dates);
+    ok(a === JSON.stringify(r.body.dates), 'week. reloading a week returns the same times');
   });
 
   await group('notice', async () => {
@@ -223,7 +246,7 @@ async function runSuite(mod) {
     const mon = mins(r.body, MON1);
     ok(r.status === 200 && mon.length === 18 && mon[0] === 600 && mon[17] === 1110,
       'admin. Stefani still sees the whole Monday, 10:00am..6:30pm (got ' + mon.length + ' times)');
-    ok(mins(r.body, MON3).length === 18, 'admin. and days past the public 14-day limit (' + MON3 + ')');
+    ok(mins(r.body, MON3).length === 18, 'admin. and every later day in full too (' + MON3 + ')');
     r = await adminList(mod, {}, 'treatment=lash-lift', null);
     ok(r.status === 401 && !r.body.dates, 'admin. the full diary is refused without her admin token (got ' + r.status + ')');
     r = await adminList(mod, {}, 'treatment=lash-lift', 'wrong');
@@ -236,7 +259,7 @@ async function runSuite(mod) {
     o.overrides[PINNED_SAT] = [480, 585, 690];
     const r = await publicList(mod, o);
     ok(mins(r.body, PINNED_SAT).join(',') === '480,585,690',
-      'pinned. a Saturday Stefani pinned is shown exactly as pinned, even 24 days out (got ' + mins(r.body, PINNED_SAT).join(',') + ')');
+      'pinned. a Saturday Stefani pinned is shown exactly as pinned (got ' + mins(r.body, PINNED_SAT).join(',') + ')');
     ok(Object.keys(r.body.dates).length === 4, 'pinned. and it does not push out the three normal days (got ' + Object.keys(r.body.dates).length + ' days)');
   });
 
@@ -246,9 +269,11 @@ async function runSuite(mod) {
     ok(r.status === 409 && r.body.error === 'too_soon' && r.inserted === 0,
       'book. a public booking inside the notice period is refused (got ' + r.status + ' ' + r.body.error + ')');
     freezeAdelaide(WED, '12:00');
-    r = await book(mod, {}, MON3, 600);       // 19 days away
+    r = await book(mod, {}, PAST_MON, 600);   // 96 days away
     ok(r.status === 409 && r.body.error === 'too_far_ahead' && r.inserted === 0,
-      'book. a public booking past the 14-day limit is refused (got ' + r.status + ' ' + r.body.error + ')');
+      'book. a public booking past the 13-week limit is refused (got ' + r.status + ' ' + r.body.error + ')');
+    r = await book(mod, {}, MON3, 600);       // 19 days away - fine
+    ok(r.status === 200 && r.body.ok === true, 'book. a time a few weeks out books (got ' + r.status + ' ' + (r.body.error || 'ok') + ')');
     r = await book(mod, {}, MON1, 600);       // 5 days away, free
     ok(r.status === 200 && r.body.ok === true && r.inserted === 1,
       'book. a time inside the rules still books (got ' + r.status + ' ' + (r.body.error || 'ok') + ')');
@@ -297,8 +322,11 @@ function pageChecks() {
 const MUTATIONS = [
   { name: 'notice off', group: 'notice',
     from: 'const MIN_NOTICE_MIN = 48 * 60;', to: 'const MIN_NOTICE_MIN = 0;' },
-  { name: 'horizon back to 60 days', group: 'horizon',
-    from: 'const HORIZON_DAYS = 14;', to: 'const HORIZON_DAYS = 60;' },
+  { name: 'horizon off', group: 'horizon',
+    from: 'const HORIZON_DAYS = 91;', to: 'const HORIZON_DAYS = 900;' },
+  { name: 'a picked week hands out the whole day', group: 'week',
+    from: 'let offered = offeredSlots(d, picture, duration);',
+    to: 'let offered = isDateStr(week) ? picture.slots : offeredSlots(d, picture, duration);' },
   { name: 'day and slot caps off', group: 'cap',
     from: 'const SHOW_MAX_DAYS = 3;', to: 'const SHOW_MAX_DAYS = 300;',
     from2: 'const SHOW_MAX_SLOTS = 6;', to2: 'const SHOW_MAX_SLOTS = 600;' },
@@ -307,7 +335,8 @@ const MUTATIONS = [
   { name: 'anchors picked at random', group: 'stable',
     from: 'const h = stableHash(dateStr);', to: 'const h = Math.floor(Math.random() * 1e9);' },
   { name: 'booking rules not enforced', group: 'book',
-    from: 'if (!picture.pinned) {\n      if (b.date > addDays(now.date, HORIZON_DAYS))', to: 'if (false) {\n      if (b.date > addDays(now.date, HORIZON_DAYS))' },
+    from: "if (b.date > addDays(now.date, HORIZON_DAYS)) return json({ error: 'too_far_ahead' }, 409, cors);", to: '',
+    from2: 'if (!picture.pinned && absMin(b.date, startMin) >= now.abs &&', to2: 'if (false && absMin(b.date, startMin) >= now.abs &&' },
   { name: 'admin diary served without a token', group: 'admin',
     from: "if (!env.ADMIN_TOKEN || auth !== `Bearer ${env.ADMIN_TOKEN}`) {", to: 'if (false) {' },
   { name: 'pinned dates squeezed like normal days', group: 'pinned',

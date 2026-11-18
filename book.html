@@ -140,6 +140,17 @@
   .next-day h3 { text-align: center; font-size: 1.3rem; margin-bottom: 14px; }
   .next-day .dow { display: block; font-family: 'Jost', sans-serif; font-size: 0.68rem; letter-spacing: 0.24em; text-transform: uppercase; color: var(--rose); margin-bottom: 4px; }
   .next-day .chip { min-width: 108px; text-align: center; }
+  .week-pick { margin-top: 40px; padding-top: 26px; border-top: 1px solid rgba(43,15,26,0.1); }
+  .week-lbl { text-align: center; font-size: 0.68rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
+  .week-strip {
+    display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 14px;
+    scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin; scrollbar-color: var(--gold) transparent;
+  }
+  .week-strip::-webkit-scrollbar { height: 5px; }
+  .week-strip::-webkit-scrollbar-thumb { background: var(--gold); border-radius: 3px; }
+  .week-chip { flex: 0 0 auto; scroll-snap-align: start; min-width: 96px; text-align: center; padding: 10px 14px; }
+  .week-chip .dow { font-size: 0.6rem; }
   .ask-other { text-align: center; color: var(--muted); font-size: 0.88rem; margin-top: 34px; }
   .ask-other a { color: var(--plum); }
 
@@ -260,6 +271,12 @@
            list and nothing else. Never add "booked" / "only X left" labels here. -->
       <div class="next-days" id="next-days"></div>
       <div class="msg err" id="time-msg"></div>
+      <!-- Look further ahead, one week at a time. Each week gets the same short
+           list from the worker - a few times a day, never the whole day. -->
+      <div class="week-pick" id="week-pick" style="display:none;">
+        <p class="week-lbl">Looking further ahead? Slide to pick a week</p>
+        <div class="week-strip" id="week-strip"></div>
+      </div>
       <p class="ask-other" id="ask-other" style="display:none;">None of these suit?
         <a href="https://www.instagram.com/reviveaesthetics.adl" target="_blank" rel="noopener">Message Stefani on Instagram</a>
         or call <a href="tel:0404967051">0404 967 051</a> and she will find you a time.</p>
@@ -614,7 +631,7 @@
   }
 
   function pickTreatment(t) {
-    state.treatment = t; state.sel = [];
+    state.treatment = t; state.sel = []; state.week = null;
     updateTimeSub(); renderAddons();
     show('p-time', 2);
     loadAvailability();
@@ -639,14 +656,18 @@
     $('ask-other').style.display = 'none';
     $('a-loading').style.display = 'block';
     var q = '/api/availability?treatment=' + encodeURIComponent(state.treatment.id) +
-            (state.sel.length ? '&addon=' + encodeURIComponent(state.sel.map(function (a) { return a.id; }).join(',')) : '');
+            (state.sel.length ? '&addon=' + encodeURIComponent(state.sel.map(function (a) { return a.id; }).join(',')) : '') +
+            (state.week ? '&week=' + encodeURIComponent(state.week) : '');
     api(q).then(function (r) {
       $('a-loading').style.display = 'none';
       state.availability = r.data.dates || {};
       var dates = Object.keys(state.availability).sort();
       $('ask-other').style.display = 'block';
+      renderWeeks(r.data.weeks || []);
       if (!dates.length) {
-        $('time-msg').textContent = 'No online times in the next two weeks.';
+        $('time-msg').textContent = state.week
+          ? 'No online times that week -- try another week.'
+          : 'No online times just now -- try a week below.';
         return;
       }
       // The worker has already cut this down to the next few openings. Render
@@ -675,6 +696,33 @@
       $('ask-other').style.display = 'block';
       $('time-msg').textContent = 'Could not load times -- please try again or call 0404 967 051.';
     });
+  }
+
+  // The week slider. First chip = the soonest openings (the default view); the
+  // rest are weeks the worker says can be booked. Picking one reloads the list.
+  function renderWeeks(weeks) {
+    var strip = $('week-strip');
+    var keepScroll = strip.scrollLeft;
+    strip.innerHTML = '';
+    if (weeks.length < 2) { $('week-pick').style.display = 'none'; return; }
+    var add = function (week, top, main) {
+      var c = document.createElement('button');
+      c.type = 'button';
+      c.className = 'chip week-chip' + ((state.week || null) === week ? ' sel' : '');
+      c.innerHTML = '<span class="dow"></span>';
+      c.querySelector('.dow').textContent = top;
+      c.appendChild(document.createTextNode(main));
+      c.addEventListener('click', function () {
+        if ((state.week || null) === week) return;
+        state.week = week;
+        loadAvailability();
+      });
+      strip.appendChild(c);
+    };
+    add(null, 'Next', 'Soonest');
+    weeks.forEach(function (w) { add(w, 'Week of', fmtDateLabel(w).day); });
+    $('week-pick').style.display = 'block';
+    strip.scrollLeft = keepScroll;
   }
 
   function pickTime(d, s, f) {
