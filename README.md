@@ -17,7 +17,8 @@ Boutique Adelaide skin studio. Static site (GitHub Pages) + custom online bookin
 - `worker/` — booking API (Cloudflare Worker + D1), **LIVE** at
   `https://revive-booking.ampedup.workers.dev`
   - `src/index.js` — availability engine (Mon/Tue 10am–8pm, 30-min grid, 30-min
-    buffer, 12h min notice, 60-day horizon), book/cancel, Telegram alerts, admin endpoints
+    buffer, 48h online notice, 14-day online horizon; the public list is only the next few
+    openings, the full diary is `/api/admin/availability`), book/cancel, Telegram alerts, admin endpoints
   - `schema.sql` — tables + seed treatments/add-ons
   - `deploy.sh` — one-shot deploy: D1 create → schema → deploy → secrets → wires the
     API URL into `book.html` → pushes the site

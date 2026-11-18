@@ -52,7 +52,8 @@ function dow(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
-// Well inside the 60-day horizon, well past the 12h minimum notice.
+// SATURDAY is a pinned date (reach: 60 days). MONDAY is a normal open day, so it
+// must sit past the 48h online notice and inside the 14-day online horizon.
 function nextWeekday(target, minAhead) {
   let d = addDays(todayAdelaide(), minAhead);
   for (let i = 0; i < 8; i++) { if (dow(d) === target) return d; d = addDays(d, 1); }
@@ -60,7 +61,7 @@ function nextWeekday(target, minAhead) {
 }
 
 const SATURDAY = nextWeekday(6, 14);
-const MONDAY = nextWeekday(1, 14);
+const MONDAY = nextWeekday(1, 4);
 
 // ---------------------------------------------------------------------------
 // fake D1 - answers from an in-memory map keyed on SQL fragments
@@ -120,12 +121,14 @@ function fakeDb(opts) {
   };
 }
 
-async function availability(mod, dbOpts, from, days) {
+async function availability(mod, dbOpts, from, days, admin) {
   const db = fakeDb(dbOpts);
-  const env = { DB: db, ALLOWED_ORIGINS: 'https://reviveaesthetics.com.au' };
+  const env = { DB: db, ALLOWED_ORIGINS: 'https://reviveaesthetics.com.au', ADMIN_TOKEN: 'test-admin' };
   const ctx = { waitUntil() {} };
-  const url = 'https://x/api/availability?treatment=lash-lift&from=' + from + '&days=' + days;
-  const res = await mod.default.fetch(new Request(url), env, ctx);
+  // admin = Stefani's full diary; the public endpoint only returns a short list.
+  const url = 'https://x/api/' + (admin ? 'admin/' : '') + 'availability?treatment=lash-lift&from=' + from + '&days=' + days;
+  const init = admin ? { headers: { Authorization: 'Bearer test-admin' } } : undefined;
+  const res = await mod.default.fetch(new Request(url, init), env, ctx);
   const body = await res.json();
   return { status: res.status, body, db };
 }
@@ -159,9 +162,11 @@ async function runSuite(mod, label) {
   r = await availability(mod, {}, MONDAY, 1);
   const monday = (r.body.dates[MONDAY] || []).map((s) => s.min);
   ok(monday.length > 0, 'd. Monday with no overrides still returns slots (got ' + monday.length + ')');
-  ok(monday[0] === 600 && monday[monday.length - 1] === 1110,
-    'd. Monday slots run the normal 10:00-8:00 grid, 10:00am..6:30pm (got ' +
-    monday[0] + '..' + monday[monday.length - 1] + ')');
+  r = await availability(mod, {}, MONDAY, 1, true);
+  const full = (r.body.dates[MONDAY] || []).map((s) => s.min);
+  ok(full[0] === 600 && full[full.length - 1] === 1110,
+    'd. Monday in the ADMIN view runs the normal 10:00-8:00 grid, 10:00am..6:30pm (got ' +
+    full[0] + '..' + full[full.length - 1] + ')');
 
   // (e) the availability LOOP must not skip a pinned non-open day found mid-range
   const satOnly = {};
@@ -180,12 +185,13 @@ async function runSuite(mod, label) {
 // ---------------------------------------------------------------------------
 function mutantSource() {
   const src = fs.readFileSync(WORKER_PATH, 'utf8');
-  let out = src.replace(
-    'async function slotsForDate(db, dateStr, durationMin, nowAbs) {',
-    'async function slotsForDate(db, dateStr, durationMin, nowAbs) {\n  if (!OPEN_DAYS.includes(dayOfWeek(dateStr))) return []; // MUTATION'
+  const head = 'async function dayPicture(db, dateStr, durationMin, nowAbs, noticeMin) {';
+  if (src.indexOf(head) === -1) throw new Error('mutation 1 did not apply - worker source changed shape');
+  let out = src.replace(head,
+    head + '\n  if (!OPEN_DAYS.includes(dayOfWeek(dateStr))) return { slots: [], pinned: false, taken: [] }; // MUTATION'
   );
   out = out.replace(
-    'if (!OPEN_DAYS.includes(dayOfWeek(d)) && !pinnedDates.has(d)) continue;',
+    'if (!OPEN_DAYS.includes(dayOfWeek(d)) && !isPinned) continue;',
     'if (!OPEN_DAYS.includes(dayOfWeek(d))) continue; // MUTATION'
   );
   if (out === src) throw new Error('mutation did not apply - worker source changed shape');

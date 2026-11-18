@@ -4,7 +4,7 @@
  *
  * Public:
  *   GET  /api/treatments
- *   GET  /api/availability?treatment=<id>&from=YYYY-MM-DD&days=N
+ *   GET  /api/availability?treatment=<id>&from=YYYY-MM-DD&days=N   (SHORT list of next openings only - never the full diary)
  *   POST /api/create-payment-intent  {name?}  → {client_secret}
  *   POST /api/book    {treatment,date,time,name,phone,email,notes,payment_intent_id}
  *   GET  /api/booking?id=&token=
@@ -13,6 +13,7 @@
  *   POST /api/consent {form,name,phone,email,booking_id,...answers}  (sculpt consent forms: body-sculpt | face-sculpt)
  *   POST /api/survey  {survey,...answers}   (mini market-research polls, e.g. lash lifts)
  * Admin (Authorization: Bearer ADMIN_TOKEN):
+ *   GET  /api/admin/availability?treatment=<id>&from=&days=   (FULL free diary - Stefani's view)
  *   GET  /api/admin/bookings?from=&to=
  *   GET  /api/admin/clients          (now includes latest intake per client)
  *   GET  /api/admin/intake?id=|phone=
@@ -36,8 +37,32 @@ const OPEN_MIN = 10 * 60;        // 10:00am
 const CLOSE_MIN = 20 * 60;       // 8:00pm
 const GRID_MIN = 30;             // slot start times every 30 min
 const BUFFER_MIN = 15;           // turnover between clients (setup/cleanup)
-const MIN_NOTICE_MIN = 12 * 60;  // bookings need 12h notice
-const HORIZON_DAYS = 60;         // how far ahead clients can book
+const MIN_NOTICE_MIN = 48 * 60;  // online bookings need 48h notice (matches the free-cancellation window)
+const HORIZON_DAYS = 14;         // how far ahead clients can book online
+
+// ---------- what a visitor is SHOWN (Marcus, 18 Nov 2026) ----------
+// The public page used to list every free time on every open day for two months
+// (229 times across 14 days on the day this was written), so anyone could read the
+// whole diary. The public endpoint now hands out a SHORT list of next openings and
+// nothing else. These settings only limit what is shown - nothing here invents
+// demand, and the page must never say "booked", "filling fast" or "only X left".
+// Stefani still sees and books everything through /api/admin/*.
+const SHOW_MAX_DAYS = 3;         // openings are spread over at most this many days
+const SHOW_MAX_SLOTS = 6;        // and never more than this many times in total
+const SHOW_QUIET_DAY = 2;        // a day with no bookings yet: one daytime + one after-work time
+const SHOW_BUSY_DAY = 3;         // a day with bookings: the times that sit next to them
+const DAY_ANCHOR_FIRST = 10 * 60;      // daytime anchor is picked from 10:00am ...
+const DAY_ANCHOR_CHOICES = 10;         // ... in 30-min steps up to 2:30pm
+const EVENING_ANCHOR_FIRST = 17 * 60;  // after-work anchor is picked from 5:00pm ...
+const EVENING_ANCHOR_CHOICES = 3;      // ... 5:30pm or 6:00pm
+// A time Stefani pins herself (slot_overrides) is her explicit word on what the
+// public sees for that date, so pinned dates are shown exactly as pinned and may
+// sit further out than the normal horizon.
+const PINNED_HORIZON_DAYS = 60;
+// A client who was shown a time may take a while to fill in her details and pay.
+// /api/book therefore accepts a time up to this long after it crossed the notice
+// line, so nobody pays a deposit and is then told the time is too soon.
+const BOOK_GRACE_MIN = 60;
 
 // ---------- time helpers (all wall-clock in Adelaide) ----------
 
@@ -90,10 +115,77 @@ const isDateStr = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
 
 // ---------- availability ----------
 
-async function slotsForDate(db, dateStr, durationMin, nowAbs) {
+// Every free start time on a date - the FULL picture. Used to validate a booking
+// and by the admin view. The public page never gets this list; see offeredSlots().
+async function slotsForDate(db, dateStr, durationMin, nowAbs, noticeMin) {
+  return (await dayPicture(db, dateStr, durationMin, nowAbs, noticeMin)).slots;
+}
+
+// Small stable hash (FNV-1a). Used only to vary which anchor times a quiet day
+// shows, so every visitor - and every reload - sees the same times for a date.
+function stableHash(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+// The free time closest to `preferred` that does not sit on top of a time already
+// chosen. Ties go to the later time.
+function nearestFree(free, preferred, chosen, durationMin) {
+  const clear = t => chosen.every(c => t >= c + durationMin + BUFFER_MIN || c >= t + durationMin + BUFFER_MIN);
+  let best = null;
+  for (const t of free) {
+    if (!clear(t)) continue;
+    if (best === null || Math.abs(t - preferred) < Math.abs(best - preferred) ||
+        (Math.abs(t - preferred) === Math.abs(best - preferred) && t > best)) best = t;
+  }
+  return best;
+}
+
+// Which of a day's free times a VISITOR is offered.
+//   pinned day  -> exactly what Stefani pinned.
+//   busy day    -> the times nearest the existing bookings, so the day fills up
+//                  back-to-back instead of scattering.
+//   quiet day   -> one daytime and one after-work time, fixed per date.
+function offeredSlots(dateStr, picture, durationMin) {
+  const free = picture.slots;
+  if (picture.pinned || free.length === 0) return free;
+
+  const chosen = [];
+  if (picture.taken.length > 0) {
+    const gap = t => Math.min(...picture.taken.map(b =>
+      t >= b.end_min ? t - b.end_min : b.start_min - (t + durationMin)));
+    const ranked = [...free].sort((a, b) => (gap(a) - gap(b)) || (a - b));
+    for (const t of ranked) {
+      if (chosen.length >= SHOW_BUSY_DAY) break;
+      // never offer two times that could not both be booked
+      if (chosen.every(c => t >= c + durationMin + BUFFER_MIN || c >= t + durationMin + BUFFER_MIN)) chosen.push(t);
+    }
+  } else {
+    const h = stableHash(dateStr);
+    const dayPref = DAY_ANCHOR_FIRST + GRID_MIN * (h % DAY_ANCHOR_CHOICES);
+    const evePref = EVENING_ANCHOR_FIRST + GRID_MIN * ((h >>> 8) % EVENING_ANCHOR_CHOICES);
+    for (const pref of [dayPref, evePref]) {
+      if (chosen.length >= SHOW_QUIET_DAY) break;
+      const t = nearestFree(free, pref, chosen, durationMin);
+      if (t !== null) chosen.push(t);
+    }
+  }
+  return chosen.sort((a, b) => a - b);
+}
+
+// { slots, pinned, taken } for one date. `slots` = every free start time;
+// `pinned` = Stefani set the exact public times for this date; `taken` = the
+// confirmed bookings already on it. `noticeMin` defaults to the online notice.
+async function dayPicture(db, dateStr, durationMin, nowAbs, noticeMin) {
+  if (!Number.isFinite(noticeMin)) noticeMin = MIN_NOTICE_MIN;
+  const closed = { slots: [], pinned: false, taken: [] };
   // A blocked date is closed no matter what - it wins over every override below.
   const blocked = await db.prepare('SELECT 1 FROM blocked_dates WHERE date = ?').bind(dateStr).first();
-  if (blocked) return [];
+  if (blocked) return closed;
 
   // Slot overrides: if any rows exist for this date, only those start_min values are candidates.
   // Read BEFORE the open-day test: a pinned date opens even when its weekday is not in
@@ -107,7 +199,7 @@ async function slotsForDate(db, dateStr, durationMin, nowAbs) {
   } catch (_) { /* table not yet migrated - treat as no overrides */ }
 
   // Non-open weekday with nothing pinned: still closed.
-  if (!allowedSet && !OPEN_DAYS.includes(dayOfWeek(dateStr))) return [];
+  if (!allowedSet && !OPEN_DAYS.includes(dayOfWeek(dateStr))) return closed;
 
   const { results: taken } = await db.prepare(
     "SELECT start_min, end_min FROM bookings WHERE date = ? AND status = 'confirmed'"
@@ -125,12 +217,12 @@ async function slotsForDate(db, dateStr, durationMin, nowAbs) {
     }
   } else {
     for (let t = OPEN_MIN; t + durationMin <= CLOSE_MIN; t += GRID_MIN) {
-      if (absMin(dateStr, t) < nowAbs + MIN_NOTICE_MIN) continue;
+      if (absMin(dateStr, t) < nowAbs + noticeMin) continue;
       const clash = taken.some(b => t < b.end_min + BUFFER_MIN && b.start_min < t + durationMin + BUFFER_MIN);
       if (!clash) slots.push(t);
     }
   }
-  return slots;
+  return { slots, pinned: !!allowedSet, taken };
 }
 
 // ---------- meta conversions api ----------
@@ -517,8 +609,9 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     const now = nowInAdelaide();
     let from = url.searchParams.get('from');
     if (!isDateStr(from) || from < now.date) from = now.date;
-    const days = Math.min(parseInt(url.searchParams.get('days') || '60', 10) || 60, HORIZON_DAYS);
-    const lastAllowed = addDays(now.date, HORIZON_DAYS);
+    const days = Math.min(parseInt(url.searchParams.get('days') || '60', 10) || 60, PINNED_HORIZON_DAYS);
+    const lastAllowed = addDays(now.date, HORIZON_DAYS);              // normal open days
+    const lastPinned = addDays(now.date, PINNED_HORIZON_DAYS);        // dates Stefani pinned herself
     // One query for every pinned date in the window, so the loop can keep its cheap
     // skip without hiding a Saturday that Stefani has deliberately opened.
     const pinnedDates = new Set();
@@ -528,15 +621,25 @@ async function handlePublic(req, env, ctx, url, path, cors) {
       ).bind(from, addDays(from, days)).all();
       for (const r of pinned) pinnedDates.add(r.date);
     } catch (_) { /* table not yet migrated - no pinned dates */ }
+    // The public only ever gets the short list: at most SHOW_MAX_DAYS normal days
+    // and SHOW_MAX_SLOTS times, chosen by offeredSlots(). A pinned date is shown
+    // exactly as Stefani pinned it and does not use up that allowance.
     const dates = {};
+    let shownDays = 0, shownSlots = 0;
     for (let i = 0; i < days; i++) {
       const d = addDays(from, i);
-      if (d > lastAllowed) break;
+      if (d > lastPinned) break;
+      const isPinned = pinnedDates.has(d);
       // Skip only days that are neither an open weekday nor pinned open via slot_overrides
       // (the Saturday trial, 20 Sept 2026). `pinnedDates` is one query, fetched above the loop.
-      if (!OPEN_DAYS.includes(dayOfWeek(d)) && !pinnedDates.has(d)) continue;
-      const slots = await slotsForDate(db, d, duration, now.abs);
-      if (slots.length) dates[d] = slots.map(m => ({ min: m, label: fmtTime(m) }));
+      if (!OPEN_DAYS.includes(dayOfWeek(d)) && !isPinned) continue;
+      if (!isPinned && (d > lastAllowed || shownDays >= SHOW_MAX_DAYS || shownSlots >= SHOW_MAX_SLOTS)) continue;
+      const picture = await dayPicture(db, d, duration, now.abs);
+      let offered = offeredSlots(d, picture, duration);
+      if (!picture.pinned) offered = offered.slice(0, SHOW_MAX_SLOTS - shownSlots);
+      if (!offered.length) continue;
+      if (!picture.pinned) { shownDays++; shownSlots += offered.length; }
+      dates[d] = offered.map(m => ({ min: m, label: fmtTime(m) }));
     }
     return json({ treatment: t.id, duration_min: duration, dates }, 200, cors);
   }
@@ -600,8 +703,20 @@ async function handlePublic(req, env, ctx, url, path, cors) {
     const price = t.price_aud + addons.reduce((s, a) => s + a.price_aud, 0);
     const addonNames = addons.map(a => a.name).join(' + ');
     const now = nowInAdelaide();
-    const open = await slotsForDate(db, b.date, duration, now.abs);
-    if (!open.includes(startMin)) return json({ error: 'slot_unavailable' }, 409, cors);
+    // The same rules the public list was built from, checked again here so the
+    // limits cannot be walked around by posting a time the page never offered.
+    // A date Stefani pinned keeps its own rules (no notice, longer reach).
+    const picture = await dayPicture(db, b.date, duration, now.abs, MIN_NOTICE_MIN - BOOK_GRACE_MIN);
+    if (!picture.pinned) {
+      if (b.date > addDays(now.date, HORIZON_DAYS)) return json({ error: 'too_far_ahead' }, 409, cors);
+      if (absMin(b.date, startMin) >= now.abs &&
+          absMin(b.date, startMin) < now.abs + MIN_NOTICE_MIN - BOOK_GRACE_MIN) {
+        return json({ error: 'too_soon' }, 409, cors);
+      }
+    } else if (b.date > addDays(now.date, PINNED_HORIZON_DAYS)) {
+      return json({ error: 'too_far_ahead' }, 409, cors);
+    }
+    if (!picture.slots.includes(startMin)) return json({ error: 'slot_unavailable' }, 409, cors);
 
     // gentle abuse cap: max 2 upcoming bookings per phone/email
     const dup = await db.prepare(
@@ -1034,6 +1149,28 @@ async function lookupAddons(db, ids) {
 
 async function handleAdmin(req, env, url, path, cors) {
   const db = env.DB;
+
+  // The FULL diary of free times - every open day, every free start, no notice,
+  // 60 days out. This is Stefani's view (her Hub and her assistant); the public
+  // /api/availability deliberately returns only a short list of next openings.
+  if (path === '/api/admin/availability' && req.method === 'GET') {
+    const t = await db.prepare('SELECT * FROM treatments WHERE id = ?').bind(url.searchParams.get('treatment')).first();
+    if (!t) return json({ error: 'unknown_treatment' }, 400, cors);
+    const addons = await lookupAddons(db, url.searchParams.get('addon'));
+    if (addons === undefined) return json({ error: 'unknown_addon' }, 400, cors);
+    const duration = t.duration_min + addons.reduce((s, a) => s + a.duration_min, 0);
+    const now = nowInAdelaide();
+    let from = url.searchParams.get('from');
+    if (!isDateStr(from) || from < now.date) from = now.date;
+    const days = Math.min(parseInt(url.searchParams.get('days') || '60', 10) || 60, PINNED_HORIZON_DAYS);
+    const dates = {};
+    for (let i = 0; i < days; i++) {
+      const d = addDays(from, i);
+      const picture = await dayPicture(db, d, duration, now.abs, 0);
+      if (picture.slots.length) dates[d] = picture.slots.map(m => ({ min: m, label: fmtTime(m) }));
+    }
+    return json({ treatment: t.id, duration_min: duration, full: true, dates }, 200, cors);
+  }
 
   if (path === '/api/admin/bookings' && req.method === 'GET') {
     const from = isDateStr(url.searchParams.get('from')) ? url.searchParams.get('from') : nowInAdelaide().date;
