@@ -253,6 +253,24 @@
     color: rgba(242,231,206,0.84); font-weight: 300;
   }
   .hero-cta { display: flex; gap: 16px; flex-wrap: wrap; }
+  /* Next openings: filled from the booking system's own short list. Space is
+     held while it loads so the page does not jump; hidden if it cannot load. */
+  .hero-next { display: none; }
+  .js .hero-next {
+    display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px;
+    margin-top: 28px; padding: 13px 20px; min-height: 54px;
+    border: 1px solid rgba(194,168,120,0.45); color: var(--cream);
+    visibility: hidden; transition: border-color .2s, background .2s;
+  }
+  .js .hero-next.is-ready { visibility: visible; }
+  .js .hero-next.is-off { display: none; }
+  .hero-next:hover { border-color: var(--gold); background: rgba(194,168,120,0.08); }
+  .hero-next-label {
+    font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold);
+  }
+  .hero-next-when {
+    font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 1.32rem; line-height: 1.2;
+  }
   .hero-facts {
     list-style: none; display: flex; flex-wrap: wrap; gap: 10px 30px; margin-top: 44px;
     padding-top: 26px; border-top: 1px solid rgba(242,231,206,0.14);
@@ -574,6 +592,7 @@
     .hero-grid { grid-template-columns: 1fr; gap: 52px; text-align: center; }
     .hero p.lead { margin: 0 auto 32px; }
     .hero-cta { justify-content: center; }
+    .js .hero-next { justify-content: center; }
     .hero-facts { justify-content: center; margin-top: 36px; gap: 10px 22px; }
     .hero-photo { margin: 0 auto; max-width: 340px; }
     .hero-photo::before { top: -12px; right: -12px; bottom: 12px; left: 12px; }
@@ -639,6 +658,10 @@
         <a href="book.html" class="btn btn--cream">Book Online</a>
         <a href="#results" class="btn btn--ghost">See the Results</a>
       </div>
+      <a class="hero-next" id="heroNext" href="book.html?t=lash-lift">
+        <span class="hero-next-label">Next lash lift openings</span>
+        <span class="hero-next-when" id="heroNextWhen"></span>
+      </a>
       <ul class="hero-facts">
         <li><span class="stars">★★★★★</span>12 five-star Google reviews</li>
         <li>Mon &amp; Tue · 10am – 8pm</li>
@@ -1213,6 +1236,40 @@
   var onScroll = function () { bar.classList.toggle('show', window.scrollY > 520); };
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
+
+  // Next openings in the hero. Reads the SAME short list the booking page shows
+  // (the worker decides what a visitor may see), so this can never go stale or
+  // show a time that cannot be booked. Says only when the next openings are -
+  // never "booked", "filling fast" or "only X left".
+  (function () {
+    var box = document.getElementById('heroNext');
+    var when = document.getElementById('heroNextWhen');
+    if (!box || !when) return;
+    var off = function () { box.classList.add('is-off'); };
+    if (!window.fetch) { off(); return; }
+    var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var timer = setTimeout(off, 6000);
+    fetch('https://revive-booking.ampedup.workers.dev/api/availability?treatment=lash-lift')
+      .then(function (r) { if (!r.ok) throw new Error('http'); return r.json(); })
+      .then(function (d) {
+        var dates = d && d.dates ? Object.keys(d.dates).sort() : [];
+        var day = dates[0];
+        var slots = day ? (d.dates[day] || []) : [];
+        var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day || '');
+        if (!m || !slots.length) throw new Error('none');
+        var dt = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 12));
+        var times = slots.slice(0, 3).map(function (s) { return s.label; }).filter(Boolean);
+        if (!times.length) throw new Error('none');
+        var list = times.length === 1 ? times[0]
+          : times.slice(0, -1).join(', ') + ' or ' + times[times.length - 1];
+        when.textContent = DAYS[dt.getUTCDay()] + ' ' + (+m[3]) + ' ' + MONTHS[+m[2] - 1] + ' · ' + list;
+        clearTimeout(timer);
+        box.classList.remove('is-off');
+        box.classList.add('is-ready');
+      })
+      .catch(function () { clearTimeout(timer); off(); });
+  })();
 </script>
 </body>
 </html>
