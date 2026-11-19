@@ -24,6 +24,7 @@
  *   POST /api/admin/book    {date,start_min,end_min,name?,notes?}  (silent — no email/Telegram)
  *   POST /api/admin/cancel  {id}
  *   POST /api/admin/send-confirmation {id, price_override?, intro?}  (re/send booking email, e.g. manual bookings)
+ *   POST /api/admin/send-comeback {email, first_name, weeks, day_label, closes_label, dry_run?}  (ONE fixed "next lash lift" email to a past client with nothing booked)
  *   POST /api/admin/set-allowed-slots {date,slots:[start_min,...]}  (pin exact public slots for a date)
  *   POST /api/admin/clear-allowed-slots {date}  (restore normal availability for a date)
  *   POST /api/admin/migrate  (idempotent: create any missing tables)
@@ -369,7 +370,7 @@ function emailShell(heading, inner) {
   <div style="max-width:560px;margin:0 auto;font-family:Georgia,'Times New Roman',serif;">
     <div style="background:#2B0F1A;text-align:center;padding:34px 20px 26px;">
       <div style="color:#F2E7CE;font-size:22px;letter-spacing:6px;">REVIVE AESTHETICS</div>
-      <div style="color:#c2a878;font-size:11px;letter-spacing:4px;margin-top:6px;">ADELAIDE SKIN STUDIO</div>
+      <div style="color:#c2a878;font-size:11px;letter-spacing:4px;margin-top:6px;">ADELAIDE LASH &amp; BROW STUDIO</div>
     </div>
     <div style="background:#fbf6ea;padding:34px 30px;color:#2b0f1a;">
       <h1 style="font-size:24px;font-weight:normal;margin:0 0 18px;">${heading}</h1>
@@ -1394,6 +1395,47 @@ async function handleAdmin(req, env, url, path, cors) {
       }, cancelUrl,
       treatmentForms(row.treatment_id, row.id, row.name, row.phone, row.email)));
     return json({ ok: !!sent, sent_to: row.email }, 200, cors);
+  }
+
+  // "Time for your next lash lift?" - ONE come-back email to a past client (Marcus, 20 Nov 2026).
+  // The words are fixed here; the caller only supplies the first name, the weeks since her visit
+  // and which day has openings. It refuses anyone who is not a past client of this studio and
+  // anyone who already has a booking ahead, so it cannot be used as a general mail sender.
+  // dry_run:true returns the email without sending it.
+  if (path === '/api/admin/send-comeback' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    const email = String(b.email || '').trim().toLowerCase();
+    if (!/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(email)) return json({ error: 'bad_email' }, 400, cors);
+    const clean = (v, max) => String(v || '').replace(/[^A-Za-z0-9 '\-]/g, '').trim().slice(0, max);
+    const first = clean(b.first_name, 30);
+    const dayLabel = clean(b.day_label, 40);          // e.g. "Monday 23 November"
+    const closesLabel = clean(b.closes_label, 20);    // e.g. "Saturday"
+    const weeks = Math.round(Number(b.weeks));
+    if (!dayLabel || !closesLabel || !(weeks >= 3 && weeks <= 52)) return json({ error: 'bad_fields' }, 400, cors);
+    const today = nowInAdelaide().date;
+    const past = await db.prepare(
+      "SELECT phone FROM bookings WHERE status='confirmed' AND date < ? AND lower(email) = ? ORDER BY date DESC LIMIT 1"
+    ).bind(today, email).first();
+    if (!past) return json({ ok: false, skipped: 'not_a_past_client' }, 200, cors);
+    const ahead = await db.prepare(
+      "SELECT COUNT(*) AS n FROM bookings WHERE status='confirmed' AND date >= ? AND (lower(email) = ? OR (phone != '' AND phone = ?))"
+    ).bind(today, email, past.phone || '').first();
+    if (ahead && ahead.n > 0) return json({ ok: false, skipped: 'already_booked_ahead' }, 200, cors);
+    const p = 'style="margin:0 0 16px;font-size:16px;line-height:1.6;"';
+    const subject = 'Time for your next lash lift?';
+    const html = emailShell('Time for your next lash lift?', `
+      <p ${p}>Hi${first ? ' ' + first : ''},</p>
+      <p ${p}>It's Stefani from Revive Aesthetics. A lash lift lasts 6 to 8 weeks, and it's been about ${weeks} weeks since yours.</p>
+      <p ${p}>I have openings this ${dayLabel}, daytime and after work.</p>
+      <p style="margin:26px 0;text-align:center;">
+        <a href="https://reviveaestheticsadl.com.au/book.html?t=lash-lift" style="display:inline-block;background:#2B0F1A;color:#F2E7CE;text-decoration:none;padding:14px 30px;font-size:13px;letter-spacing:3px;text-transform:uppercase;">Pick your time</a>
+      </p>
+      <p ${p}>Online times for ${dayLabel.split(' ')[0]} close on ${closesLabel}, because I need 48 hours' notice. After that, just reply to this email or message me.</p>
+      <p ${p}>Stefani</p>
+      <p style="margin:26px 0 0;font-size:12px;line-height:1.5;color:#6f5b58;">You're getting this because you've had a lash lift with me. Don't want these emails? Reply STOP and I won't send another.</p>`);
+    if (b.dry_run) return json({ ok: true, dry_run: true, to: email, subject, html }, 200, cors);
+    const sent = await sendEmail(env, email, subject, html);
+    return json({ ok: !!sent, sent_to: email }, 200, cors);
   }
 
   // Pin the exact public slots Stefani wants shown for a date (replaces any previous override).
