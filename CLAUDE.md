@@ -73,6 +73,29 @@ content, and help run her business, the same way Marcus's assistant helps him.
   last lash booking and only offer dates on or after last visit + 42 days. If she asks for earlier,
   say it is too soon for her lashes and offer the first safe Mon/Tue.
 
+## Thank-you email after a visit (Marcus + Stefani, 24 Nov 2026)
+- **What it is:** one fixed email from her Revive Gmail: thanks for coming in, and **$10 off the next
+  visit when the client posts her results on Instagram and tags @reviveaesthetics.adl**. The words
+  live in `worker/src/index.js` (`thanksEmail`). **Stefani keeps track of who posted herself** —
+  nothing counts it, so never tell her who has or has not posted.
+- **Who gets it:** a confirmed booking that has finished, with an email, once per booking. Never a
+  consultation, a cancelled booking, or anyone on the STOP list. A no-show gets nothing if her
+  booking is cancelled in the Hub within the hour.
+- **Automatic sending is a switch, OFF until Stefani says yes** (her approval card, or her own word
+  here). When on, the worker sends it about an hour after each appointment ends, 8am–9:15pm.
+  ```bash
+  node ~/.openclaw/revive-automations/thanks/auto.js          # is it on?
+  node ~/.openclaw/revive-automations/thanks/auto.js --off    # "turn off the thank-you emails"
+  node ~/.openclaw/revive-automations/thanks/auto.js --on     # only on HER word
+  ```
+- **Someone replies STOP to any email:** add her, and tell Stefani it is done. She then gets no
+  thank-you or come-back emails (booking confirmations and reminders still go).
+  ```bash
+  TOKEN=$(cat ~/.openclaw/revive-admin-token.txt)
+  curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "content-type: application/json" \
+    -d '{"email":"her@email.com"}' https://revive-booking.ampedup.workers.dev/api/admin/email-optout
+  ```
+
 ## How to do common jobs
 - **⚠️ ALWAYS run `node scripts/check-pages.js` before you commit a page.** It
   compiles every inline `<script>` and refuses anything that would not parse.

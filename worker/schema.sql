@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   notes        TEXT NOT NULL DEFAULT '',
   status       TEXT NOT NULL DEFAULT 'confirmed',  -- confirmed | cancelled
   reminded     INTEGER NOT NULL DEFAULT 0,         -- day-before reminder email sent
+  thanked      INTEGER NOT NULL DEFAULT 0,         -- thank-you email after the visit sent (existing databases: POST /api/admin/migrate)
   cancel_token TEXT NOT NULL,
   created_at   TEXT NOT NULL,
   cancelled_at TEXT
@@ -106,3 +107,15 @@ CREATE TABLE IF NOT EXISTS intake_forms (
 );
 CREATE INDEX IF NOT EXISTS ix_intake_phone ON intake_forms(phone);
 CREATE INDEX IF NOT EXISTS ix_intake_created ON intake_forms(created_at);
+
+-- small on/off switches (thanks_auto = the thank-you email after every visit)
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT ''
+);
+
+-- people who replied STOP: no come-back or thank-you emails
+CREATE TABLE IF NOT EXISTS email_optout (
+  email      TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL DEFAULT ''
+);

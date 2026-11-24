@@ -25,6 +25,9 @@
  *   POST /api/admin/cancel  {id}
  *   POST /api/admin/send-confirmation {id, price_override?, intro?}  (re/send booking email, e.g. manual bookings)
  *   POST /api/admin/send-comeback {email, first_name, weeks, day_label, closes_label, dry_run?}  (ONE fixed "next lash lift" email to a past client with nothing booked)
+ *   POST /api/admin/send-thanks {id, dry_run?}  (ONE fixed thank-you email for a finished booking: $10 off for an Instagram post that tags the studio)
+ *   GET|POST /api/admin/thanks-auto {on}  (read / switch the automatic thank-you email after every visit)
+ *   POST /api/admin/email-optout {email, remove?}  (someone replied STOP: no more come-back or thank-you emails)
  *   POST /api/admin/set-allowed-slots {date,slots:[start_min,...]}  (pin exact public slots for a date)
  *   POST /api/admin/clear-allowed-slots {date}  (restore normal availability for a date)
  *   POST /api/admin/migrate  (idempotent: create any missing tables)
@@ -562,6 +565,79 @@ async function sendReminders(env) {
   }
 }
 
+// ---------- thank-you email after a visit (Marcus + Stefani, 24 Nov 2026) ----------
+// ONE fixed email: thanks for coming in, and $10 off the next visit for an Instagram post of the
+// results that tags the studio. The words are fixed here. A booking gets it once (bookings.thanked).
+// Consultations get none (there is no result to post). Stefani tracks the $10 herself.
+const THANKS_DELAY_MIN = 60;             // goes at least this long after the appointment ends
+const THANKS_FROM_MIN = 8 * 60;          // emails leave from 8:00am ...
+const THANKS_TO_MIN = 21 * 60 + 15;      // ... to 9:15pm Adelaide
+const THANKS_MAX_AGE_MIN = 7 * 1440;     // never for a visit more than a week old
+const THANKS_SUBJECT = 'Thank you for coming in';
+const THANKS_SELECT = 'SELECT b.*, t.name AS tname FROM bookings b JOIN treatments t ON t.id = b.treatment_id';
+
+function firstNameOf(name) {
+  const f = String(name || '').trim().split(/\s+/)[0].replace(/[^A-Za-z'\-]/g, '').slice(0, 30);
+  return f ? f[0].toUpperCase() + f.slice(1).toLowerCase() : '';
+}
+
+function thanksEmail(first) {
+  const p = 'style="margin:0 0 16px;font-size:16px;line-height:1.6;"';
+  return emailShell('Thank you for coming in', `
+      <p ${p}>Hi${first ? ' ' + first : ''},</p>
+      <p ${p}>It's Stefani from Revive Aesthetics. Thank you for coming in to see me. I hope you're loving your results.</p>
+      <p ${p}>A little thank-you from me: post your results on Instagram and tag <a href="https://www.instagram.com/reviveaesthetics.adl/" style="color:#2B0F1A;">@reviveaesthetics.adl</a>, and I'll take $10 off your next visit.</p>
+      <p ${p}>Stefani</p>
+      <p style="margin:26px 0 0;font-size:12px;line-height:1.5;color:#6f5b58;">You're getting this because you had an appointment with me. Don't want these emails? Reply STOP and I won't send another.</p>`);
+}
+
+const optedOut = async (db, email) =>
+  !!(await db.prepare('SELECT 1 AS x FROM email_optout WHERE email = ?').bind(String(email || '').trim().toLowerCase()).first());
+
+// Why a booking cannot get the thank-you ('' = it can).
+async function thanksBlock(db, r, now) {
+  if (!r) return 'no_such_booking';
+  if (r.status !== 'confirmed') return 'not_confirmed';
+  if (!r.email) return 'no_email';
+  if (r.thanked) return 'already_thanked';
+  if (/consult/i.test(r.tname || '')) return 'consultation';
+  if (/\b(test|derbali)\b/i.test(r.name || '')) return 'test_booking';
+  const endAbs = absMin(r.date, r.end_min);
+  if (now.abs < endAbs + THANKS_DELAY_MIN) return 'not_finished_yet';
+  if (now.abs > endAbs + THANKS_MAX_AGE_MIN) return 'too_long_ago';
+  if (await optedOut(db, r.email)) return 'opted_out';
+  return '';
+}
+
+// Send it once: claim the booking first, so a slow or repeated run can never send twice.
+async function sendThanksFor(env, r) {
+  const claim = await env.DB.prepare('UPDATE bookings SET thanked = 1 WHERE id = ? AND thanked = 0').bind(r.id).run();
+  if (!claim.meta || claim.meta.changes !== 1) return false;
+  const sent = await sendEmail(env, r.email, THANKS_SUBJECT, thanksEmail(firstNameOf(r.name)));
+  if (!sent) await env.DB.prepare('UPDATE bookings SET thanked = 0 WHERE id = ?').bind(r.id).run();
+  return !!sent;
+}
+
+const thanksQuiet = (now) => now.min < THANKS_FROM_MIN || now.min > THANKS_TO_MIN;
+
+// Hourly: when Stefani has switched it on, thank everyone whose appointment finished an hour or more ago.
+async function sendThanks(env) {
+  const db = env.DB;
+  const on = await db.prepare("SELECT value FROM settings WHERE key = 'thanks_auto'").first();
+  if (!on || on.value !== 'on') return;
+  const now = nowInAdelaide();
+  if (thanksQuiet(now)) return;
+  const since = await db.prepare("SELECT value FROM settings WHERE key = 'thanks_auto_since'").first();
+  const from = [addDays(now.date, -1), (since && since.value) || now.date].sort().pop();   // never a visit from before it was switched on
+  const { results } = await db.prepare(
+    `${THANKS_SELECT} WHERE b.status = 'confirmed' AND b.thanked = 0 AND b.email != '' AND b.date BETWEEN ? AND ?`
+  ).bind(from, now.date).all();
+  for (const r of results) {
+    if (await thanksBlock(db, r, now)) continue;
+    await sendThanksFor(env, r);
+  }
+}
+
 // ---------- http plumbing ----------
 
 function corsHeaders(req, env) {
@@ -601,6 +677,7 @@ export default {
   },
   async scheduled(event, env, ctx) {
     ctx.waitUntil(sendReminders(env));
+    ctx.waitUntil(sendThanks(env).catch(() => {}));   // its own promise: a fault here never touches the reminders
   },
 };
 
@@ -1421,6 +1498,7 @@ async function handleAdmin(req, env, url, path, cors) {
       "SELECT COUNT(*) AS n FROM bookings WHERE status='confirmed' AND date >= ? AND (lower(email) = ? OR (phone != '' AND phone = ?))"
     ).bind(today, email, past.phone || '').first();
     if (ahead && ahead.n > 0) return json({ ok: false, skipped: 'already_booked_ahead' }, 200, cors);
+    if (await optedOut(db, email).catch(() => false)) return json({ ok: false, skipped: 'opted_out' }, 200, cors);
     const p = 'style="margin:0 0 16px;font-size:16px;line-height:1.6;"';
     const subject = 'Time for your next lash lift?';
     const html = emailShell('Time for your next lash lift?', `
@@ -1436,6 +1514,46 @@ async function handleAdmin(req, env, url, path, cors) {
     if (b.dry_run) return json({ ok: true, dry_run: true, to: email, subject, html }, 200, cors);
     const sent = await sendEmail(env, email, subject, html);
     return json({ ok: !!sent, sent_to: email }, 200, cors);
+  }
+
+  // Thank-you email for ONE finished booking (see "thank-you email after a visit" above). The caller
+  // gives only the booking id; the words, who may get it and the hours are decided here, so it
+  // cannot be used as a general mail sender. dry_run:true returns the email without sending it.
+  if (path === '/api/admin/send-thanks' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    const r = await db.prepare(`${THANKS_SELECT} WHERE b.id = ?`).bind(String(b.id || '')).first();
+    const now = nowInAdelaide();
+    const why = await thanksBlock(db, r, now);
+    if (why) return json({ ok: false, skipped: why }, 200, cors);
+    const first = firstNameOf(r.name);
+    if (b.dry_run) return json({ ok: true, dry_run: true, first, subject: THANKS_SUBJECT, html: thanksEmail(first) }, 200, cors);
+    if (thanksQuiet(now)) return json({ ok: false, later: true, skipped: 'quiet_hours' }, 200, cors);
+    return json({ ok: await sendThanksFor(env, r), first }, 200, cors);
+  }
+
+  // The automatic thank-you after every visit: read it (GET) or switch it (POST {on:true|false}).
+  if (path === '/api/admin/thanks-auto' && (req.method === 'GET' || req.method === 'POST')) {
+    const set = (k, v) => db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(k, v).run();
+    if (req.method === 'POST') {
+      const b = await req.json().catch(() => ({}));
+      if (typeof b.on !== 'boolean') return json({ error: 'bad_fields' }, 400, cors);
+      await set('thanks_auto', b.on ? 'on' : 'off');
+      if (b.on) await set('thanks_auto_since', nowInAdelaide().date);
+    }
+    const { results } = await db.prepare("SELECT key, value FROM settings WHERE key IN ('thanks_auto', 'thanks_auto_since')").all();
+    const s = Object.fromEntries(results.map(x => [x.key, x.value]));
+    return json({ ok: true, on: s.thanks_auto === 'on', since: s.thanks_auto_since || '' }, 200, cors);
+  }
+
+  // Someone replied STOP: no more come-back or thank-you emails to that address ({remove:true} undoes it).
+  // Booking confirmations and reminders for a booking she makes herself still go.
+  if (path === '/api/admin/email-optout' && req.method === 'POST') {
+    const b = await req.json().catch(() => ({}));
+    const email = String(b.email || '').trim().toLowerCase();
+    if (!/^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(email)) return json({ error: 'bad_email' }, 400, cors);
+    if (b.remove) await db.prepare('DELETE FROM email_optout WHERE email = ?').bind(email).run();
+    else await db.prepare("INSERT OR IGNORE INTO email_optout (email, created_at) VALUES (?, datetime('now'))").bind(email).run();
+    return json({ ok: true, email, opted_out: !b.remove }, 200, cors);
   }
 
   // Pin the exact public slots Stefani wants shown for a date (replaces any previous override).
@@ -1499,6 +1617,10 @@ async function handleAdmin(req, env, url, path, cors) {
     await db.exec(`ALTER TABLE bookings ADD COLUMN deposit_cents INTEGER DEFAULT 0`).catch(() => {});
     // treatment_ids on addons — added 2026-09-01; empty string = applies to all treatments
     await db.exec(`ALTER TABLE addons ADD COLUMN treatment_ids TEXT NOT NULL DEFAULT ''`).catch(() => {});
+    // Thank-you email after a visit — added 2026-11-24. thanked = that booking has had it.
+    await db.exec(`ALTER TABLE bookings ADD COLUMN thanked INTEGER NOT NULL DEFAULT 0`).catch(() => {});
+    await db.prepare(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`).run();
+    await db.prepare(`CREATE TABLE IF NOT EXISTS email_optout (email TEXT PRIMARY KEY, created_at TEXT NOT NULL DEFAULT '')`).run();
     // client_flags — added 2026-09-08; flags clients who must pay a deposit before booking
     await db.prepare(
       `CREATE TABLE IF NOT EXISTS client_flags (
